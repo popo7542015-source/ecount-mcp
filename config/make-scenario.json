@@ -1,0 +1,288 @@
+{
+  "scenario": {
+    "name": "프랜차이즈 신규 오픈 자동 영업 시스템",
+    "description": "프랜차이즈 신규 오픈 감지 → 자동 제안 생성 → 카카오톡 발송 완전 자동화",
+    "triggers": [
+      {
+        "type": "schedule",
+        "frequency": "daily",
+        "time": "06:00",
+        "description": "매일 오전 6시 신규 오픈 정보 수집 (Stage 1)"
+      },
+      {
+        "type": "schedule",
+        "frequency": "daily",
+        "time": "12:00",
+        "description": "정오에 데이터 정제 및 분류 (Stage 2)"
+      },
+      {
+        "type": "schedule",
+        "frequency": "daily",
+        "time": "18:00",
+        "description": "저녁 6시 맞춤 제안 생성 (Stage 3)"
+      }
+    ],
+    "steps": [
+      {
+        "step": 1,
+        "name": "신규 오픈 정보 수집",
+        "module": "HTTP",
+        "config": {
+          "action": "fetch",
+          "urls": [
+            "https://www.twosome.co.kr/franchise",
+            "https://www.ediya.com/franchise",
+            "https://www.baekcoffee.com/franchise"
+          ],
+          "method": "GET",
+          "selectors": {
+            "storeName": ".store-name",
+            "location": ".store-location",
+            "openDate": ".opening-date",
+            "status": ".construction-status"
+          }
+        }
+      },
+      {
+        "step": 2,
+        "name": "Google Sheets에 저장",
+        "module": "Google Sheets",
+        "config": {
+          "action": "append_rows",
+          "spreadsheetId": "YOUR_GOOGLE_SHEET_ID",
+          "range": "신규오픈!A:F",
+          "columns": [
+            "브랜드명",
+            "지점명",
+            "위치",
+            "오픈예정일",
+            "공사상태",
+            "감지시간"
+          ]
+        }
+      },
+      {
+        "step": 3,
+        "name": "Claude API로 데이터 분류",
+        "module": "Claude",
+        "config": {
+          "action": "classify",
+          "model": "claude-opus-5",
+          "prompt": "프랜차이즈 신규 오픈 정보를 업종/지역/단계별로 분류하고 필요 가구를 추정하세요."
+        }
+      },
+      {
+        "step": 4,
+        "name": "맞춤 영업 제안 생성",
+        "module": "Claude",
+        "config": {
+          "action": "generate",
+          "model": "claude-opus-5",
+          "templates": {
+            "cafe": "카페 맞춤형 36T LPM 테이블 + 의자 세트 제안",
+            "restaurant": "고깃집 맞춤형 불판 원탁 + 의자 세트 제안",
+            "bar": "호프/펍 맞춤형 하이 테이블 + 바 스툴 제안",
+            "convenience": "편의점 확장 맞춤형 선반 테이블 제안"
+          }
+        }
+      },
+      {
+        "step": 5,
+        "name": "시공사 데이터베이스 매칭",
+        "module": "Google Sheets",
+        "config": {
+          "action": "vlookup",
+          "lookupSheet": "시공사DB",
+          "lookupField": "지역",
+          "returnField": "시공사연락처"
+        }
+      },
+      {
+        "step": 6,
+        "name": "카카오톡 알림톡 발송 (시공사 우선)",
+        "module": "Solapi",
+        "config": {
+          "action": "send_kakao_alimtalk",
+          "templateCode": "FRANCHISE_PITCH_V1",
+          "targets": "primaryConstructionCompany",
+          "variables": [
+            "brand",
+            "storeName",
+            "location",
+            "recommendedFurniture",
+            "estimatedPrice",
+            "portfolioLink"
+          ]
+        }
+      },
+      {
+        "step": 7,
+        "name": "카카오톡 알림톡 발송 (점주)",
+        "module": "Solapi",
+        "config": {
+          "action": "send_kakao_alimtalk",
+          "templateCode": "FRANCHISE_PITCH_OWNER",
+          "targets": "storeOwner",
+          "condition": "if noPrimaryResponseAfter48hours"
+        }
+      },
+      {
+        "step": 8,
+        "name": "내부 알림 (사장님 + 영업팀)",
+        "module": "Telegram",
+        "config": {
+          "action": "send_message",
+          "chatId": "YOUR_TELEGRAM_CHAT_ID",
+          "message": "신규 오픈 감지: {brand} {storeName} ({location})\n- 업종: {category}\n- 발송 대상: {targetType}\n- 상태: 발송 완료"
+        }
+      },
+      {
+        "step": 9,
+        "name": "발송 결과 추적",
+        "module": "Google Sheets",
+        "config": {
+          "action": "log_delivery",
+          "spreadsheetId": "YOUR_GOOGLE_SHEET_ID",
+          "range": "발송로그!A:H",
+          "fields": [
+            "발송시간",
+            "대상",
+            "채널",
+            "상태",
+            "개봉율",
+            "클릭율",
+            "문의여부",
+            "계약여부"
+          ]
+        }
+      },
+      {
+        "step": 10,
+        "name": "주간 분석 리포트 생성",
+        "module": "Claude",
+        "config": {
+          "action": "analyze",
+          "frequency": "weekly",
+          "metrics": [
+            "total_sent",
+            "open_rate",
+            "click_rate",
+            "inquiry_rate",
+            "conversion_rate",
+            "revenue"
+          ]
+        }
+      }
+    ],
+    "notifications": {
+      "onSuccess": {
+        "type": "telegram",
+        "message": "✅ 파이프라인 실행 성공\n발송: {sent}건\n계약: {converted}건\n매출: {revenue}만원"
+      },
+      "onError": {
+        "type": "email",
+        "to": "boss@company.com",
+        "subject": "[긴급] 자동화 시스템 오류 발생"
+      }
+    },
+    "schedule": {
+      "daily": "06:00, 12:00, 18:00",
+      "weekly": "매주 금요일 오후 5시 (주간 분석)",
+      "monthly": "매월 1일 (월간 리포트)"
+    }
+  },
+  "apiCredentials": {
+    "claude": "ANTHROPIC_API_KEY",
+    "googleSheets": "GOOGLE_SERVICE_ACCOUNT_JSON",
+    "solapi": "SOLAPI_API_KEY",
+    "telegram": "TELEGRAM_BOT_TOKEN"
+  },
+  "googleSheets": {
+    "spreadsheetId": "YOUR_GOOGLE_SHEET_ID",
+    "worksheets": [
+      {
+        "name": "신규오픈",
+        "columns": [
+          "브랜드명",
+          "지점명",
+          "위치",
+          "오픈예정일",
+          "공사상태",
+          "감지시간",
+          "업종분류",
+          "필요가구",
+          "예상금액"
+        ]
+      },
+      {
+        "name": "발송로그",
+        "columns": [
+          "발송시간",
+          "대상",
+          "채널",
+          "상태",
+          "개봉율",
+          "클릭율",
+          "문의여부",
+          "계약여부",
+          "계약금액"
+        ]
+      },
+      {
+        "name": "시공사DB",
+        "columns": [
+          "시공사명",
+          "지역",
+          "연락처",
+          "거래이력",
+          "신뢰도"
+        ]
+      },
+      {
+        "name": "분석리포트",
+        "columns": [
+          "기간",
+          "총발송",
+          "개봉율",
+          "클릭율",
+          "문의율",
+          "계약율",
+          "매출",
+          "ROI"
+        ]
+      }
+    ]
+  },
+  "kaoaTalkTemplates": [
+    {
+      "code": "FRANCHISE_PITCH_V1",
+      "name": "프랜차이즈 신규 오픈 시공사 피치",
+      "message": "[#{brand} #{storeName}]\n신규 오픈을 축하드립니다!\n\n▶ 추천 가구: #{furniture}\n▶ 예상 금액: #{price}\n▶ 포트폴리오: #{portfolio}\n\n빠른 납기 + 직영 단가\n즉시 문의: 010-XXXX-XXXX",
+      "buttons": [
+        {
+          "text": "포트폴리오 보기",
+          "url": "#{portfolio}"
+        },
+        {
+          "text": "상담 예약",
+          "url": "https://consultation.example.com"
+        }
+      ]
+    },
+    {
+      "code": "FRANCHISE_PITCH_OWNER",
+      "name": "프랜차이즈 신규 오픈 점주 피치",
+      "message": "[#{brand} #{storeName}]\n가구 납품 전문가입니다.\n\n#{furniture} 납품 가능\n기한 내 빠른 납기 + 설치 지도\n\n문의: 010-XXXX-XXXX",
+      "buttons": [
+        {
+          "text": "시공사에 추천",
+          "url": "https://redirect.example.com"
+        },
+        {
+          "text": "직접 문의",
+          "url": "tel:01012345678"
+        }
+      ]
+    }
+  ]
+}
