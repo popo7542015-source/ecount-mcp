@@ -5,7 +5,7 @@ const {
   StreamableHTTPServerTransport,
 } = require("@modelcontextprotocol/sdk/server/streamableHttp.js");
 const { z } = require("zod");
-const { getInventory, getClient } = require("./ecount");
+const { getInventory, getClient, rawCall } = require("./ecount");
 
 function buildServer() {
   const server = new McpServer({
@@ -57,6 +57,40 @@ function buildServer() {
     async ({ company, client_keyword }) => {
       try {
         const result = await getClient(company, client_keyword);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      } catch (err) {
+        return {
+          content: [{ type: "text", text: `오류: ${err.message}` }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  server.registerTool(
+    "ecount_raw_api",
+    {
+      title: "이카운트 API 직접 호출 (디버그용)",
+      description:
+        "개발/디버그용: 이카운트 오픈 API의 임의 경로를 직접 호출해 원본 응답(JSON)을 반환합니다. 새 기능을 붙이기 전에 엔드포인트와 응답 구조를 확인할 때 사용합니다.",
+      inputSchema: {
+        company: z
+          .enum(["odin", "segwang"])
+          .describe("호출할 회사: odin(오딘) 또는 segwang(세광)"),
+        path: z
+          .string()
+          .describe("API 경로 (예: /OAPI/V2/InventoryBasic/GetBasicProductsList)"),
+        body: z
+          .string()
+          .optional()
+          .describe('요청 본문 JSON 문자열 (예: {"BASE_DATE":"20260903"}). 생략 가능'),
+      },
+    },
+    async ({ company, path, body }) => {
+      try {
+        const result = await rawCall(company, path, body);
         return {
           content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
         };
