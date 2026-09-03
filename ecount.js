@@ -218,11 +218,18 @@ async function getInventory(companyKey, itemKeyword) {
 // 거래처 조회: 정확한 엔드포인트가 문서마다 달라서, 후보 주소를 순서대로 시도한다.
 // 한 번 성공한 주소는 기억해서 다음부터 바로 사용.
 const CLIENT_ENDPOINT_CANDIDATES = [
-  "/OAPI/V2/AccountBasic/GetBasicCustomersList",
-  "/OAPI/V2/AccountBasic/GetBasicCust",
-  "/OAPI/V2/AccountBasic/ViewBasicCust",
-  "/OAPI/V2/Account/GetBasicAccount",
-  "/OAPI/V2/Account/GetListAccount",
+  "/OAPI/V2/AccountBasic/GetBasicCustsList",
+  "/OAPI/V2/AccountBasic/GetBasicCustList",
+  "/OAPI/V2/AccountBasic/GetListBasicCust",
+  "/OAPI/V2/AccountBasic/GetCustomers",
+  "/OAPI/V2/AccountBasic/ViewCust",
+  "/OAPI/V2/CustBasic/GetBasicCustList",
+  "/OAPI/V2/Cust/GetCustList",
+  "/OAPI/V2/Cust/GetListCust",
+  "/OAPI/V2/Customer/GetCustomerList",
+  "/OAPI/V2/Account/GetCustomers",
+  "/OAPI/V2/Account/GetListCustomer",
+  "/OAPI/V2/BasicCust/GetBasicCustList",
 ];
 let workingClientEndpoint = null;
 
