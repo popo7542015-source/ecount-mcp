@@ -86,6 +86,9 @@
   .inputs input { font: inherit; font-family: "IBM Plex Mono", monospace; padding: 8px 10px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); width: 100%; }
   .inputs input:focus-visible { outline: 3px solid var(--focus); }
 
+  .part-grid { display: grid; gap: 12px; }
+  .part-label { font-size: 14px; font-weight: 600; color: var(--ink-2); margin-bottom: 6px; }
+  .len-over { color: #E3563A; font-weight: 600; }
   .readout { position: sticky; top: 16px; background: var(--code-bg); color: var(--code-ink); padding: 20px 22px 22px; display: grid; gap: 14px; }
   .readout .eyebrow { color: var(--code-dim); }
   .code-big { font-family: "IBM Plex Mono", monospace; font-size: 30px; font-weight: 600; letter-spacing: 0.02em; word-break: break-all; line-height: 1.2; }
@@ -137,7 +140,7 @@
   <header>
     <div class="eyebrow">(주)오딘 · 세광가구 — 빅데이터 기초자료</div>
     <h1>세광 가구 분류코드 조합기</h1>
-    <p>품목 → 소재 → 기능 → 규격 → 색상 순서로 누르면 품목코드와 코드명이 만들어집니다. 종합계획설계도에 쓰신 약어(Cwo, Cst, TLP, THP, TB-cm, SF, OD, TG, BK/WT…)를 그대로 썼고 빈 자리만 채운 제안안입니다.</p>
+    <p>사장님 원안 <span class="mono">Cst001-at-at-bk</span>(대분류 대문자 · 소재 소문자 · 일련번호 · 프레임색 · 등판색 · 방석색) 그대로, 자릿수만 고정한 20자 이내 코드를 만듭니다. 이카운트에 넣을 칸(품목명·규격·품목그룹·추가항목)까지 함께 나옵니다.</p>
   </header>
 
   <!-- A -->
@@ -145,37 +148,47 @@
     <div class="sec-head"><span class="sec-letter">A</span><div><h2>코드 조합기</h2><p>한 상품의 코드를 만들어 보는 자리입니다. 아래 표(C)의 코드가 그대로 쓰입니다.</p></div></div>
     <div class="builder">
       <div class="steps">
-        <div class="step"><div class="step-title"><b>1. 품목</b><span>대분류 · 코드 1~2자</span></div><div class="chips" id="pick-item"></div></div>
-        <div class="step"><div class="step-title"><b>2. 소재</b><span id="mat-hint">프레임 또는 상판 소재</span></div><div class="chips" id="pick-mat"></div></div>
-        <div class="step"><div class="step-title"><b>3. 기능·형태</b><span>품목에 따라 목록이 바뀝니다</span></div><div class="chips" id="pick-fn"></div></div>
-        <div class="step"><div class="step-title"><b>4. 일련번호 · 규격</b><span>규격은 대표 치수(mm), 없으면 비움</span></div>
+        <div class="step"><div class="step-title"><b>1. 품목</b><span>대분류 · 대문자 1자</span></div><div class="chips" id="pick-item"></div></div>
+        <div class="step"><div class="step-title"><b>2. 소재</b><span id="mat-hint">프레임 또는 상판 소재 · 소문자 2자</span></div><div class="chips" id="pick-mat"></div></div>
+        <div class="step"><div class="step-title"><b>3. 일련번호 · 규격</b><span>일련번호 3자리 고정. 규격은 탁자·상판·다리만 (mm 4자리)</span></div>
           <div class="inputs">
             <label>일련번호 (3자리)<input id="in-seq" value="001" maxlength="3" inputmode="numeric"></label>
-            <label>규격 (예: 1200, 750, 720)<input id="in-size" value="" placeholder="비워도 됨" inputmode="numeric"></label>
+            <label id="size-label">규격 (예: 1200, 0720)<input id="in-size" value="" placeholder="비워도 됨" maxlength="4" inputmode="numeric"></label>
           </div>
         </div>
-        <div class="step"><div class="step-title"><b>5. 색상</b><span>사장님 색상 약어 15개</span></div><div class="chips" id="pick-color"></div></div>
-        <div class="step"><div class="step-title"><b>6. 용도 태그 (여러 개 가능)</b><span>코드에는 안 들어가고 별도 열로 저장</span></div><div class="chips" id="pick-use"></div></div>
+        <div class="step"><div class="step-title"><b>4. 부위별 색·마감</b><span>1번째 대시 · 2번째 대시 · 3번째 대시. 없는 부위는 00</span></div>
+          <div class="part-grid">
+            <div><div class="part-label" id="lbl-c1">프레임</div><div class="chips" id="pick-c1"></div></div>
+            <div><div class="part-label" id="lbl-c2">등판</div><div class="chips" id="pick-c2"></div></div>
+            <div><div class="part-label" id="lbl-c3">좌판·방석</div><div class="chips" id="pick-c3"></div></div>
+          </div>
+        </div>
+        <div class="step"><div class="step-title"><b>5. 기능·형태 (품목그룹 속성)</b><span>코드에는 안 들어가고 이카운트 품목그룹·품목명에 들어갑니다</span></div><div class="chips" id="pick-fn"></div></div>
+        <div class="step"><div class="step-title"><b>6. 용도 태그 (여러 개 가능)</b><span>품목그룹3 · 다중 태그</span></div><div class="chips" id="pick-use"></div></div>
+        <div class="step"><div class="step-title"><b>7. 시리즈명 (품목명 앞부분)</b><span>예: 나비수인, 세븐체어, 노바</span></div>
+          <div class="inputs"><label>시리즈명<input id="in-series" value="나비수인" style="font-family:inherit"></label></div>
+        </div>
       </div>
       <aside class="readout" aria-live="polite">
         <div class="eyebrow">품목코드</div>
-        <div class="code-big" id="out-code">C-st-bc-001-BK</div>
+        <div class="code-big" id="out-code">Cst001-at-at-bk</div><div class="hint" id="out-len">15자 / 20자</div>
         <dl class="code-parts" id="out-parts"></dl>
-        <div class="code-name" id="out-name">철재 등받이의자 001 블랙</div>
+        <div class="code-name" id="out-name">나비수인 철재의자 엔틱/엔틱/검정</div>
+        <div><div class="eyebrow" style="margin-bottom:6px">이카운트 입력 칸</div><dl class="code-parts" id="out-ecount"></dl></div>
         <div><div class="eyebrow" style="margin-bottom:6px">용도 태그</div><div class="tags" id="out-tags"><span class="tag">—</span></div></div>
         <div class="btn-row"><button class="btn" id="btn-copy" type="button">코드 복사</button><button class="btn ghost" id="btn-add" type="button">목록에 추가</button></div>
         <p class="hint" id="copy-hint">복사 버튼을 누르면 코드와 코드명이 복사됩니다.</p>
       </aside>
     </div>
     <div class="tbl-wrap" style="margin-top:18px" id="list-wrap" hidden>
-      <table><thead><tr><th>품목코드</th><th>코드명</th><th>품목</th><th>소재</th><th>기능</th><th>규격</th><th>색상</th><th>용도</th></tr></thead><tbody id="list-body"></tbody></table>
+      <table><thead><tr><th>품목코드</th><th>품목명</th><th>규격</th><th>품목그룹1</th><th>품목그룹2</th><th>품목그룹3</th><th>추가1 프레임</th><th>추가2 등판</th><th>추가3 좌판</th><th>기능</th></tr></thead><tbody id="list-body"></tbody></table>
     </div>
-    <p class="hint" style="color:var(--ink-3);margin:8px 0 0">목록은 이 화면에만 남습니다. 표를 드래그해 복사하면 구글 시트에 그대로 붙습니다.</p>
+    <p class="hint" style="color:var(--ink-3);margin:8px 0 0">목록은 이 화면에만 남습니다. 표를 드래그해 복사하면 구글 시트·이카운트 엑셀 업로드 양식에 그대로 붙습니다.</p>
   </section>
 
   <!-- B -->
   <section id="b">
-    <div class="sec-head"><span class="sec-letter">B</span><div><h2>제안 카테고리 3축</h2><p>쇼핑몰 메뉴 구조입니다. 1축은 코드와 1:1, 2축은 태그, 3축은 세광만 가진 부품·서비스입니다.</p></div></div>
+    <div class="sec-head"><span class="sec-letter">B</span><div><h2>제안 카테고리 3축</h2><p>쇼핑몰 메뉴 구조입니다. 1축은 코드 앞 3자(대분류+소재)와 1:1, 2축은 품목그룹3 태그, 3축은 세광만 가진 부품·서비스입니다.</p></div></div>
     <div class="tabs" role="tablist">
       <button class="tab" role="tab" aria-selected="true" data-tab="t1" type="button">1축 · 품목 → 소재</button>
       <button class="tab" role="tab" aria-selected="false" data-tab="t2" type="button">2축 · 업종·공간 (태그)</button>
@@ -189,7 +202,7 @@
 
   <!-- C -->
   <section id="c">
-    <div class="sec-head"><span class="sec-letter">C</span><div><h2>코드 마스터표</h2><p>축별 코드 전체입니다. 저장소의 CSV 파일(코드마스터_분류기초자료.csv)과 같은 내용입니다.</p></div></div>
+    <div class="sec-head"><span class="sec-letter">C</span><div><h2>코드 마스터표</h2><p>축별 코드 전체입니다. 저장소의 CSV 파일(코드마스터_분류기초자료.csv)과 같은 내용입니다. 색은 소문자 2자, 없는 부위는 00입니다.</p></div></div>
     <div class="filter"><input id="master-q" type="search" placeholder="코드나 이름으로 찾기 (예: 철재, hp, 원반)" aria-label="코드 검색"><span id="master-count" class="axis-pill"></span></div>
     <div class="tbl-wrap" style="max-height:520px;overflow:auto">
       <table><thead><tr><th>축</th><th>코드</th><th>코드명</th><th>설명</th><th>사장님 기존 표기</th></tr></thead><tbody id="master-body"></tbody></table>
@@ -214,25 +227,25 @@
 <script>
 (function () {
   const ITEMS = [
-    { c: "C",  n: "의자",      mats: ["wo","st","pl","al","ra","ss"], fns: ["bc","ar","bn","sl","sn","fd","sw"], size: "좌고" },
-    { c: "CB", n: "바텐",      mats: ["st","wo","al","pl","ra"],      fns: ["hi","aj","bc","sl"], size: "좌고" },
-    { c: "T",  n: "탁자",      mats: ["sw","ws","ah","tk","ak","rw","mo","vn","nb","lp","hp","cm","ss","pl","st","mb","gl","fx","dr","wp"], fns: ["sq","rd","ov","fd","hi","aj"], size: "가로" },
-    { c: "TP", n: "상판",      mats: ["lp","hp","sw","ws","cm","nb","vn","mb","gl","fx","wp"], fns: ["sq","rd","ov"], size: "가로" },
-    { c: "TG", n: "탁자다리",  mats: ["st","ss","al","wo"],           fns: ["dk","p2","p3","p4","tw","fr","hh","cv","aj","im"], size: "높이" },
-    { c: "SF", n: "소파",      mats: ["wo","st","fb","le","ra"],      fns: ["s1","s2","s3","bi","ot","cn"], size: "가로" },
-    { c: "OD", n: "아웃도어",  mats: ["wp","ra","al","st","pl"],      fns: ["bc","bn","sq","rd","ps","st2"], size: "가로" },
-    { c: "FX", n: "집기·선반", mats: ["st","wo","ss","lp"],           fns: ["sq","aj"], size: "가로" },
-    { c: "AC", n: "액세서리",  mats: ["fb","le","pl"],                fns: [], size: "" },
+    { c: "C", n: "의자",      mats: ["wo","st","pl","al","ra","ss"], fns: ["bc","ar","bn","sl","sn","fd","sw"], parts: ["프레임","등판","좌판·방석"], size: false },
+    { c: "B", n: "바텐",      mats: ["st","wo","al","pl","ra"],      fns: ["hi","aj","bc","sl"], parts: ["프레임","등판","좌판·방석"], size: false },
+    { c: "T", n: "탁자",      mats: ["sw","ws","ah","tk","ak","rw","mo","vn","nb","lp","hp","cm","ss","pl","st","mb","gl","fx","dr","wp"], fns: ["sq","rd","ov","fd","hi","aj"], parts: ["상판","다리","엣지"], size: "가로 mm" },
+    { c: "P", n: "상판",      mats: ["lp","hp","sw","ws","cm","nb","vn","mb","gl","fx","wp"], fns: ["sq","rd","ov"], parts: ["상판","엣지","(없음)"], size: "가로 mm" },
+    { c: "G", n: "탁자다리",  mats: ["st","ss","al","wo"],           fns: ["dk","p2","p3","p4","tw","fr","hh","cv","aj","im"], parts: ["다리","(없음)","(없음)"], size: "높이 mm" },
+    { c: "S", n: "소파",      mats: ["wo","st","fb","le","ra"],      fns: ["s1","s2","s3","bi","ot","cn"], parts: ["프레임","등판","좌판"], size: false },
+    { c: "O", n: "아웃도어",  mats: ["wp","ra","al","st","pl"],      fns: ["bc","bn","sq","rd","ps","st2"], parts: ["프레임","등판·상판","좌판"], size: false },
+    { c: "F", n: "집기·선반", mats: ["st","wo","ss","lp"],           fns: ["sq","aj"], parts: ["프레임","선반","(없음)"], size: "가로 mm" },
+    { c: "A", n: "부속",      mats: ["fb","le","pl"],                fns: [], parts: ["본체","(없음)","(없음)"], size: false },
   ];
   const MATS = {
     wo:["목재","원목·집성 프레임","Cwo / SF-WO","wood"], st:["철재","철 프레임·분체도장","Cst","steel"], pl:["사출·플라스틱","PP·PC 사출","Cpl",""],
-    al:["알루미늄","알루미늄 프레임","Cal / Fal","steel"], ra:["라탄","천연·인조 라탄","Clat",""], ss:["스텐","스테인리스","Tsus","steel"],
+    al:["알루미늄","알루미늄 프레임","Cal / Fal","steel"], ra:["라탄","천연·인조 라탄","Clat",""], ss:["스텐","스테인리스 (원안 st와 분리)","Tsus","steel"],
     lp:["LPM","저압 멜라민 상판","TLP / LPM TB-lp",""], hp:["HPL·HPM","고압 멜라민 상판","THP / HPM TB-hp",""], sw:["집성목","집성목 상판","TB-sw / TF","wood"],
-    ws:["우드슬랩","통원목 슬랩","Tws","wood"], cm:["세라믹","세라믹 상판","TB-cm",""], nb:["내츄럴보드","내츄럴보드 상판","TB-nb / Tnb","wood"],
-    vn:["무늬목","인조·천연 무늬목","인조무늬목","wood"], ah:["애쉬","애쉬 원목","TVash / 애쉬-ah","wood"], tk:["티크","티크 원목","티크-K","wood"],
+    ws:["우드슬랩","통원목 슬랩","Tws","wood"], cm:["세라믹","세라믹 상판","TB-cm / Tce",""], nb:["내츄럴보드","내츄럴보드 상판","TB-nb / Tnb","wood"],
+    vn:["무늬목","인조·천연 무늬목","무늬목/TV","wood"], ah:["애쉬","애쉬 원목","TVash / 애쉬-ah","wood"], tk:["티크","티크 원목","티크-K","wood"],
     ak:["아카시아","아카시아 원목","아카시아","wood"], rw:["고무나무","고무나무 원목","고무나무","wood"], mo:["멀바우","몽구루(멀바우) 원목 · 추론","몽구루-mo","wood"],
     mb:["대리석","천연·인조 대리석","",""], wp:["합성수지목","야외용 합성목재","합성수지목",""], fb:["패브릭","패브릭 좌판·소파","",""],
-    le:["가죽","천연·인조가죽","",""], gl:["유리","강화유리 상판","",""], fx:["포맥스","포맥스 상판","포맥스",""], dr:["드럼통","드럼통(대포상) · 추론","대포상 / Tdr","steel"],
+    le:["가죽","천연·인조가죽","",""], gl:["유리","강화유리 상판","",""], fx:["포맥스","포맥스 상판","포맥스",""], dr:["드럼통","드럼통(대포상) · 추론","Tdr","steel"],
   };
   const FNS = {
     bc:["등받이","기본 등받이형"], ar:["암체어","팔걸이 있음"], bn:["벤치","2인 이상 긴 의자"], sl:["스툴","등받이 없음"], sn:["수납","좌판 아래 수납 (Csst)"],
@@ -241,11 +254,12 @@
     dk:["원반다리","원반 받침"], p2:["2인치다리","2인치 기둥"], p3:["3인치다리","3인치 기둥"], p4:["4인치다리","4인치 기둥"], tw:["쌍기둥","쌍기둥 평판"], fr:["프레임다리","사각 프레임"],
     hh:["H형다리","H형"], cv:["평판곡다리","평판 곡선"], im:["수입다리","수입"], ps:["파라솔","파라솔·차양"], st2:["세트","의자+탁자 세트"],
   };
-  const COLORS = { WT:"화이트", BK:"블랙", GR:"그레이", IV:"아이보리", BG:"베이지", BL:"블루", GN:"그린", SV:"실버", GD:"골드", KK:"카키", AT:"엔틱", NA:"내추럴", BR:"브라운", RD:"레드", VT:"빈티지" };
+  const COLORS = { wt:["화이트","RAL 9016"], bk:["블랙","RAL 9005"], gr:["그레이","RAL 7035"], iv:["아이보리","RAL 1015"], bg:["베이지","RAL 1001"], bl:["블루","RAL 5010"], gn:["그린","RAL 6005"], sv:["실버","RAL 9006"], gd:["골드",""], kk:["카키","RAL 7008"], at:["엔틱","마감"], na:["내추럴","마감"], br:["브라운","RAL 8017"], rd:["레드","RAL 3020"], vt:["빈티지","마감"], "00":["해당없음","부위 없음"] };
   const USES = { CF:"카페", RS:"식당·주점", CT:"구내식당", OF:"사무·중역", HT:"호텔·숙박", OD:"야외", HM:"가정·홈카페" };
   const BRANDS = { h:"한림", ds:"대신", ys:"유신", el:"엘라톤", fm:"포마이카", mk:"롱코", ij:"일중" };
+  const HS = { wo:"9401.61", st:"9401.71", al:"9401.71", pl:"9401.80", ra:"9403.83", ss:"9403.20" };
 
-  const state = { item: "C", mat: "st", fn: "bc", color: "BK", uses: new Set(["CF","RS"]) };
+  const state = { item: "C", mat: "st", fn: "bc", c: ["at","at","bk"], uses: new Set(["CF","RS"]) };
   const $ = (id) => document.getElementById(id);
 
   function chip(code, label, pressed, cls) {
@@ -253,19 +267,21 @@
     b.type = "button"; b.className = "chip" + (cls ? " " + cls : ""); b.setAttribute("aria-pressed", pressed ? "true" : "false");
     b.innerHTML = label + " <code>" + code + "</code>"; b.dataset.code = code; return b;
   }
-  function renderItems() {
-    const box = $("pick-item"); box.innerHTML = "";
-    ITEMS.forEach(it => { const b = chip(it.c, it.n, state.item === it.c); b.onclick = () => { state.item = it.c; ensureValid(); renderAll(); }; box.appendChild(b); });
-  }
   function currentItem() { return ITEMS.find(i => i.c === state.item); }
   function ensureValid() {
     const it = currentItem();
     if (!it.mats.includes(state.mat)) state.mat = it.mats[0] || "";
     if (!it.fns.includes(state.fn)) state.fn = it.fns[0] || "";
+    it.parts.forEach((p, i) => { if (p === "(없음)") state.c[i] = "00"; else if (state.c[i] === "00") state.c[i] = i === 0 ? "bk" : "00"; });
+    if (!it.size) $("in-size").value = "";
+  }
+  function renderItems() {
+    const box = $("pick-item"); box.innerHTML = "";
+    ITEMS.forEach(it => { const b = chip(it.c, it.n, state.item === it.c); b.onclick = () => { state.item = it.c; ensureValid(); renderAll(); }; box.appendChild(b); });
   }
   function renderMats() {
     const it = currentItem(); const box = $("pick-mat"); box.innerHTML = "";
-    $("mat-hint").textContent = (it.c === "T" || it.c === "TP") ? "상판 소재 (나무 계열은 갈색, 금속은 회색)" : "프레임 소재";
+    $("mat-hint").textContent = (it.c === "T" || it.c === "P") ? "상판 소재 (나무 계열은 갈색, 금속은 회색)" : "프레임 소재 · 소문자 2자";
     it.mats.forEach(m => { const d = MATS[m]; const b = chip(m, d[0], state.mat === m, d[3]); b.title = d[1]; b.onclick = () => { state.mat = m; renderAll(); }; box.appendChild(b); });
   }
   function renderFns() {
@@ -273,9 +289,16 @@
     if (!it.fns.length) { box.innerHTML = '<span style="color:var(--ink-3);font-size:14px">이 품목은 기능 코드 없음</span>'; return; }
     it.fns.forEach(f => { const d = FNS[f]; const b = chip(f === "st2" ? "st" : f, d[0], state.fn === f); b.title = d[1]; b.onclick = () => { state.fn = f; renderAll(); }; box.appendChild(b); });
   }
-  function renderColors() {
-    const box = $("pick-color"); box.innerHTML = "";
-    Object.entries(COLORS).forEach(([c, n]) => { const b = chip(c, n, state.color === c); b.onclick = () => { state.color = c; renderAll(); }; box.appendChild(b); });
+  function renderParts() {
+    const it = currentItem();
+    $("size-label").firstChild.textContent = it.size ? "규격 (" + it.size + ", 4자리)" : "규격 (이 품목은 안 씀)";
+    $("in-size").disabled = !it.size;
+    [0,1,2].forEach(i => {
+      const box = $("pick-c" + (i+1)); box.innerHTML = "";
+      $("lbl-c" + (i+1)).textContent = (i+1) + "번째 대시 · " + it.parts[i];
+      if (it.parts[i] === "(없음)") { box.innerHTML = '<span class="chip" aria-pressed="true">해당없음 <code>00</code></span>'; return; }
+      Object.entries(COLORS).forEach(([c, d]) => { const b = chip(c, d[0], state.c[i] === c); b.title = d[1]; b.onclick = () => { state.c[i] = c; renderAll(); }; box.appendChild(b); });
+    });
   }
   function renderUses() {
     const box = $("pick-use"); box.innerHTML = "";
@@ -284,28 +307,38 @@
   function build() {
     const it = currentItem();
     const seq = ($("in-seq").value || "").replace(/\D/g, "").padStart(3, "0").slice(-3);
-    const size = ($("in-size").value || "").replace(/\D/g, "");
-    const fnCode = state.fn === "st2" ? "st" : state.fn;
-    const parts = [it.c, state.mat, fnCode, seq].filter(Boolean);
-    if (size) parts.push(size);
-    parts.push(state.color);
-    const code = parts.join("-");
-    const name = [MATS[state.mat] ? MATS[state.mat][0] : "", FNS[state.fn] ? FNS[state.fn][0] : "", it.n, seq, size ? size + "mm" : "", COLORS[state.color]].filter(Boolean).join(" ");
-    return { code, name, seq, size, it };
+    const size = it.size ? ($("in-size").value || "").replace(/\D/g, "").padStart(4, "0").slice(-4) : "";
+    const sizeOn = it.size && ($("in-size").value || "").replace(/\D/g, "").length > 0;
+    let code = it.c + state.mat + seq + "-" + state.c.join("-");
+    if (sizeOn) code += "-" + size;
+    const series = ($("in-series").value || "").trim();
+    const matName = MATS[state.mat] ? MATS[state.mat][0] : "";
+    const fnName = FNS[state.fn] ? FNS[state.fn][0] : "";
+    const colorTxt = state.c.map((c, i) => it.parts[i] === "(없음)" ? null : COLORS[c][0]).filter(Boolean).join("/");
+    const name = [series, matName + (fnName && it.c !== "G" ? " " + fnName : "") + it.n, colorTxt, sizeOn ? size : ""].filter(Boolean).join(" ");
+    return { code, name, seq, size: sizeOn ? size : "", it, matName, fnName, series };
   }
   function renderOut() {
     const r = build();
     $("out-code").textContent = r.code;
+    const len = r.code.length; const lenEl = $("out-len");
+    lenEl.textContent = len + "자 / 20자" + (len > 20 ? " — 초과! 이카운트 품목코드 한도" : ""); lenEl.className = "hint" + (len > 20 ? " len-over" : "");
     $("out-name").textContent = r.name;
     const dl = $("out-parts"); dl.innerHTML = "";
-    const rows = [[r.it.c, "품목 · " + r.it.n], [state.mat, "소재 · " + (MATS[state.mat] ? MATS[state.mat][0] : "")], [state.fn === "st2" ? "st" : state.fn, "기능 · " + (FNS[state.fn] ? FNS[state.fn][0] : "없음")], [r.seq, "일련번호"], [r.size || "—", "규격 " + (r.it.size ? "(" + r.it.size + ", mm)" : "")], [state.color, "색상 · " + COLORS[state.color]]];
+    const rows = [[r.it.c, "대분류 · " + r.it.n], [state.mat, "소재 · " + r.matName], [r.seq, "일련번호"]];
+    r.it.parts.forEach((p, i) => rows.push([state.c[i], (i+1) + "번째 대시 · " + p + (p === "(없음)" ? "" : " " + COLORS[state.c[i]][0])]));
+    if (r.size) rows.push([r.size, "규격 " + r.it.size]);
     rows.forEach(([k, v]) => { const dt = document.createElement("dt"); dt.textContent = k; const dd = document.createElement("dd"); dd.textContent = v; dl.append(dt, dd); });
+    const ec = $("out-ecount"); ec.innerHTML = "";
+    const useTxt = [...state.uses].join(",") || "—";
+    [["품목코드", r.code], ["품목명", r.name], ["규격", r.size ? "W" + r.size : "—"], ["품목그룹1", r.it.c + " " + r.it.n], ["품목그룹2", state.mat + " " + r.matName], ["품목그룹3", useTxt], ["추가항목1~3", state.c.join(" / ")], ["추가항목4 HS", HS[state.mat] || "—"]]
+      .forEach(([k, v]) => { const dt = document.createElement("dt"); dt.textContent = k; const dd = document.createElement("dd"); dd.textContent = v; ec.append(dt, dd); });
     const tags = $("out-tags"); tags.innerHTML = "";
     if (!state.uses.size) tags.innerHTML = '<span class="tag">—</span>';
     [...state.uses].forEach(u => { const s = document.createElement("span"); s.className = "tag"; s.textContent = u + " " + USES[u]; tags.appendChild(s); });
   }
-  function renderAll() { renderItems(); renderMats(); renderFns(); renderColors(); renderUses(); renderOut(); }
-  $("in-seq").addEventListener("input", renderOut); $("in-size").addEventListener("input", renderOut);
+  function renderAll() { renderItems(); renderMats(); renderParts(); renderFns(); renderUses(); renderOut(); }
+  ["in-seq","in-size","in-series"].forEach(id => $(id).addEventListener("input", renderOut));
 
   $("btn-copy").onclick = async () => {
     const r = build(); const text = r.code + "\t" + r.name;
@@ -315,7 +348,7 @@
   $("btn-add").onclick = () => {
     const r = build(); $("list-wrap").hidden = false;
     const tr = document.createElement("tr");
-    const cells = [r.code, r.name, r.it.n, MATS[state.mat] ? MATS[state.mat][0] : "", FNS[state.fn] ? FNS[state.fn][0] : "", r.size, COLORS[state.color], [...state.uses].join(",")];
+    const cells = [r.code, r.name, r.size ? "W" + r.size : "", r.it.c + " " + r.it.n, state.mat + " " + r.matName, [...state.uses].join(","), state.c[0], state.c[1], state.c[2], r.fnName];
     cells.forEach((c, i) => { const td = document.createElement("td"); if (i === 0) { const code = document.createElement("code"); code.textContent = c; td.appendChild(code); } else td.textContent = c; tr.appendChild(td); });
     $("list-body").prepend(tr);
     const n = parseInt(r.seq, 10); if (!isNaN(n)) $("in-seq").value = String(n + 1).padStart(3, "0"); renderOut();
@@ -330,11 +363,11 @@
   const t1 = $("t1");
   t1.append(
     node("의자", "C", ["목재 <code>wo</code> · 철재 <code>st</code> · 사출 <code>pl</code> · 알루미늄 <code>al</code> · 라탄 <code>ra</code> · 스텐 <code>ss</code>", "형태: 등받이 · 암체어 · 벤치 · 스툴 · 수납 · 접이 · 회전", "좌판: 원목 · 방석 · 가죽 · 패브릭 (필터)"], "현재 사이트: 목재 40 · 철재 143 · 플라스틱 26 · 골드 · 라탄 · 빠체어 · 보조스툴"),
-    node("바텐", "CB", ["철재 <code>st</code> · 목재 <code>wo</code> · 알루미늄 <code>al</code> · 플라스틱 <code>pl</code>", "높이조절 <code>aj</code> · 좌고 65 / 75"], "현재 사이트: 빠체어 (의자 아래)"),
+    node("바텐", "B", ["철재 <code>st</code> · 목재 <code>wo</code> · 알루미늄 <code>al</code> · 플라스틱 <code>pl</code>", "높이조절 <code>aj</code> · 좌고 65 / 75"], "현재 사이트: 빠체어 (의자 아래)"),
     node("탁자", "T", ["<b>나무 계열</b>: 집성목 <code>sw</code> · 우드슬랩 <code>ws</code> · 애쉬 <code>ah</code> · 무늬목 <code>vn</code> · 내츄럴보드 <code>nb</code>", "<b>인조 상판</b>: LPM <code>lp</code> · HPL <code>hp</code> (브랜드 한림·대신·유신·엘라톤·포마이카는 필터)", "<b>기타</b>: 세라믹 <code>cm</code> · 스텐 <code>ss</code> · 플라스틱 <code>pl</code> · 철재 <code>st</code> · 드럼통 <code>dr</code>", "형태: 사각 · 원형 · 타원 · 접이 · 하이 · 인원 2/4/6"], "현재 사이트: 우드 65 · 우드그레인 70 · 유신HPL · 집성목 20 · 우드슬랩 7 · 세라믹 4 · 철재탁자 · 드럼통"),
-    node("소파", "SF", ["목재 <code>wo</code> · 철재 <code>st</code> · 패브릭 <code>fb</code> · 가죽 <code>le</code>", "1인 · 2인 · 3인 · 붙박이(주문) · 오토만 · 코너"], "현재 사이트: 목재 7 · 철재 22 · 붙박이 7 · 가정용 9"),
-    node("아웃도어", "OD", ["합성수지목 <code>wp</code> · 라탄 <code>ra</code> · 알루미늄 <code>al</code> · 철재 <code>st</code>", "의자 · 벤치 · 탁자 · 파라솔(국산·수입) · 세트"], "현재 사이트: 아웃도어 (세부 미확인)"),
-    node("집기·선반", "FX", ["선반 · 카운터 · 파티션", "의자·소파·탁자는 위 대분류로 이동"], "현재 사이트: 집기(의자 3 · 소파 3 · 탁자 9 · 다리 20 · 선반 4 · 액세서리 2) — 중복 정리 대상")
+    node("소파", "S", ["목재 <code>wo</code> · 철재 <code>st</code> · 패브릭 <code>fb</code> · 가죽 <code>le</code>", "1인 · 2인 · 3인 · 붙박이(주문) · 오토만 · 코너"], "현재 사이트: 목재 7 · 철재 22 · 붙박이 7 · 가정용 9"),
+    node("아웃도어", "O", ["합성수지목 <code>wp</code> · 라탄 <code>ra</code> · 알루미늄 <code>al</code> · 철재 <code>st</code>", "의자 · 벤치 · 탁자 · 파라솔(국산·수입) · 세트"], "현재 사이트: 아웃도어 (세부 미확인)"),
+    node("집기·선반", "F", ["선반 · 카운터 · 파티션", "의자·소파·탁자는 위 대분류로 이동"], "현재 사이트: 집기(의자 3 · 소파 3 · 탁자 9 · 다리 20 · 선반 4 · 액세서리 2) — 중복 정리 대상")
   );
   const t2 = $("t2");
   [["카페", "CF", ["카페 테이블 600~750", "목재·철재 의자, 바텐", "소파·라운지"]], ["식당·주점", "RS", ["4인 HPL·세라믹 탁자", "사출·철재 의자", "붙박이소파, 드럼통 테이블"]], ["구내식당·급식", "CT", ["6인 이상 탁자", "사출 의자, 벤치"]], ["사무·중역", "OF", ["사무용 의자, 회의 테이블", "파티션"]], ["호텔·숙박", "HT", ["라운지, 1인 소파", "사이드 테이블"]], ["테라스·야외", "OD", ["아웃도어 전체", "파라솔"]], ["가정·홈카페", "HM", ["가정용 소파", "식탁 세트"]]]
@@ -342,8 +375,8 @@
   t2.appendChild(node("납품사례", "", ["프랜차이즈 본사별 납품 실적", "시공 사진 + 사용 품목코드 링크"], "금성파지오·이피카소 방식"));
   const t3 = $("t3");
   t3.append(
-    node("상판", "TP", ["LPM · HPL · 집성목 · 세라믹 · 우드슬랩 · 내츄럴보드", "규격별 재고현황 (이카운트 연동)"]),
-    node("탁자다리", "TG", ["원반 <code>dk</code> · 2인치 <code>p2</code> · 3인치 <code>p3</code> · 4인치 <code>p4</code>", "쌍기둥 <code>tw</code> · 프레임 <code>fr</code> · H형 <code>hh</code> · 평판곡 <code>cv</code> · 조절 <code>aj</code> · 수입 <code>im</code>", "색상 BK · WT · SV · GD"]),
+    node("상판", "P", ["LPM · HPL · 집성목 · 세라믹 · 우드슬랩 · 내츄럴보드", "규격별 재고현황 (이카운트 연동)"]),
+    node("탁자다리", "G", ["원반 <code>dk</code> · 2인치 <code>p2</code> · 3인치 <code>p3</code> · 4인치 <code>p4</code>", "쌍기둥 <code>tw</code> · 프레임 <code>fr</code> · H형 <code>hh</code> · 평판곡 <code>cv</code> · 조절 <code>aj</code> · 수입 <code>im</code>", "색상 BK · WT · SV · GD"]),
     node("컬러칩·샘플", "", ["상판 색상표: 한림 <code>h</code> · 대신 <code>ds</code> · 유신 <code>ys</code> · 엘라톤 <code>el</code> · 포마이카 <code>fm</code> · 롱코 <code>mk</code> · 일중 <code>ij</code>", "프레임 분체 색상"], "한국TA '제작샘플칩' 방식"),
     node("세트 상품", "", ["의자+탁자 2인 / 4인", "야외 세트"], "에프엠·이피카소 방식"),
     node("주문제작", "", ["붙박이소파 · 맞춤 탁자 · 집기"], "한국TA 방식"),
@@ -359,8 +392,10 @@
   ITEMS.forEach(i => master.push(["품목", i.c, i.n, "", ""]));
   Object.entries(MATS).forEach(([c, d]) => master.push(["소재", c, d[0], d[1], d[2]]));
   Object.entries(FNS).forEach(([c, d]) => master.push(["기능", c === "st2" ? "st" : c, d[0], d[1], ""]));
-  Object.entries(COLORS).forEach(([c, n]) => master.push(["색상", c, n, "", c]));
-  Object.entries(USES).forEach(([c, n]) => master.push(["용도", c, n, "다중 태그, 코드 밖 별도 열", ""]));
+  Object.entries(COLORS).forEach(([c, d]) => master.push(["색상", c, d[0], d[1], c.toUpperCase()]));
+  [["1","프레임","1번째 대시 (탁자는 상판)"],["2","등판","2번째 대시 (탁자는 다리)"],["3","좌판·방석","3번째 대시 (탁자는 엣지)"],["4","규격","4번째 대시, 탁자·상판·다리만 mm 4자리"]].forEach(r => master.push(["부위", r[0], r[1], r[2], ""]));
+  [["9401.61","목재프레임 쿠션의자","wo"],["9401.71","금속프레임 쿠션의자","st·al"],["9401.79","금속프레임 기타의자","st·al"],["9401.80","기타 의자(플라스틱)","pl"],["9403.20","금속가구","탁자 st"],["9403.60","기타 목재가구","탁자 wo"],["9403.83","라탄가구","ra"]].forEach(r => master.push(["HS코드", r[0], r[1], "수입신고용 · 확신도 85%", r[2]]));
+  Object.entries(USES).forEach(([c, n]) => master.push(["용도", c, n, "품목그룹3 · 다중 태그, 코드 밖", ""]));
   Object.entries(BRANDS).forEach(([c, n]) => master.push(["상판브랜드", c, n, "HPL/LPM 상판 필터", ""]));
   function renderMaster(q) {
     q = (q || "").trim().toLowerCase(); const body = $("master-body"); body.innerHTML = ""; let n = 0;
