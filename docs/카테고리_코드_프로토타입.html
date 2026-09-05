@@ -140,7 +140,7 @@
   <header>
     <div class="eyebrow">(주)오딘 · 세광가구 — 빅데이터 기초자료</div>
     <h1>세광 가구 분류코드 조합기</h1>
-    <p>사장님 원안 <span class="mono">Cst001-at-at-bk</span>(대분류 대문자 · 소재 소문자 · 일련번호 · 프레임색 · 등판색 · 방석색) 그대로, 자릿수만 고정한 20자 이내 코드를 만듭니다. 이카운트에 넣을 칸(품목명·규격·품목그룹·추가항목)까지 함께 나옵니다.</p>
+    <p>사장님 원안 <span class="mono">Cst001-at-at-bk</span>(대분류 · 소재 · 일련번호 · 프레임색 · 등판색 · 방석색) 구조 그대로, 자릿수를 고정하고 전부 대문자로 통일한 20자 이내 코드를 만듭니다(입력 화면의 소문자 약어는 설명용, 결과는 대문자). 이카운트에 넣을 칸(품목명·규격·품목그룹·추가항목)까지 함께 나옵니다.</p>
   </header>
 
   <!-- A -->
@@ -148,15 +148,15 @@
     <div class="sec-head"><span class="sec-letter">A</span><div><h2>코드 조합기</h2><p>한 상품의 코드를 만들어 보는 자리입니다. 아래 표(C)의 코드가 그대로 쓰입니다.</p></div></div>
     <div class="builder">
       <div class="steps">
-        <div class="step"><div class="step-title"><b>1. 품목</b><span>대분류 · 대문자 1자</span></div><div class="chips" id="pick-item"></div></div>
-        <div class="step"><div class="step-title"><b>2. 소재</b><span id="mat-hint">프레임 또는 상판 소재 · 소문자 2자</span></div><div class="chips" id="pick-mat"></div></div>
+        <div class="step"><div class="step-title"><b>1. 품목</b><span>대분류 · 1자</span></div><div class="chips" id="pick-item"></div></div>
+        <div class="step"><div class="step-title"><b>2. 소재</b><span id="mat-hint">프레임 또는 상판 소재 · 2자</span></div><div class="chips" id="pick-mat"></div></div>
         <div class="step"><div class="step-title"><b>3. 일련번호 · 규격</b><span>일련번호 3자리 고정. 규격은 탁자·상판·다리만 (mm 4자리)</span></div>
           <div class="inputs">
             <label>일련번호 (3자리)<input id="in-seq" value="001" maxlength="3" inputmode="numeric"></label>
             <label id="size-label">규격 (예: 1200, 0720)<input id="in-size" value="" placeholder="비워도 됨" maxlength="4" inputmode="numeric"></label>
           </div>
         </div>
-        <div class="step"><div class="step-title"><b>4. 부위별 색·마감</b><span>1번째 대시 · 2번째 대시 · 3번째 대시. 없는 부위는 00</span></div>
+        <div class="step"><div class="step-title"><b>4. 부위별 색·마감</b><span>1번째 대시 · 2번째 대시 · 3번째 대시. 없는 부위는 NN</span></div>
           <div class="part-grid">
             <div><div class="part-label" id="lbl-c1">프레임</div><div class="chips" id="pick-c1"></div></div>
             <div><div class="part-label" id="lbl-c2">등판</div><div class="chips" id="pick-c2"></div></div>
@@ -171,7 +171,7 @@
       </div>
       <aside class="readout" aria-live="polite">
         <div class="eyebrow">품목코드</div>
-        <div class="code-big" id="out-code">Cst001-at-at-bk</div><div class="hint" id="out-len">15자 / 20자</div>
+        <div class="code-big" id="out-code">CST001-AT-AT-BK</div><div class="hint" id="out-len">15자 / 20자</div>
         <dl class="code-parts" id="out-parts"></dl>
         <div class="code-name" id="out-name">나비수인 철재의자 엔틱/엔틱/검정</div>
         <div><div class="eyebrow" style="margin-bottom:6px">이카운트 입력 칸</div><dl class="code-parts" id="out-ecount"></dl></div>
@@ -202,7 +202,7 @@
 
   <!-- C -->
   <section id="c">
-    <div class="sec-head"><span class="sec-letter">C</span><div><h2>코드 마스터표</h2><p>축별 코드 전체입니다. 저장소의 CSV 파일(코드마스터_분류기초자료.csv)과 같은 내용입니다. 색은 소문자 2자, 없는 부위는 00입니다.</p></div></div>
+    <div class="sec-head"><span class="sec-letter">C</span><div><h2>코드 마스터표</h2><p>축별 코드 전체입니다. 저장소의 CSV 파일(코드마스터_분류기초자료.csv)과 같은 내용입니다. 색은 2자, 없는 부위는 NN입니다. 실제 코드는 전부 대문자로 씁니다.</p></div></div>
     <div class="filter"><input id="master-q" type="search" placeholder="코드나 이름으로 찾기 (예: 철재, hp, 원반)" aria-label="코드 검색"><span id="master-count" class="axis-pill"></span></div>
     <div class="tbl-wrap" style="max-height:520px;overflow:auto">
       <table><thead><tr><th>축</th><th>코드</th><th>코드명</th><th>설명</th><th>사장님 기존 표기</th></tr></thead><tbody id="master-body"></tbody></table>
@@ -227,8 +227,9 @@
 <script>
 (function () {
   const ITEMS = [
-    { c: "C", n: "의자",      mats: ["wo","st","pl","al","ra","ss"], fns: ["bc","ar","bn","sl","sn","fd","sw"], parts: ["프레임","등판","좌판·방석"], size: false },
+    { c: "C", n: "의자",      mats: ["wo","st","pl","al","ra","ss"], fns: ["bc","ar","bn","sn","fd","sw"], parts: ["프레임","등판","좌판·방석"], size: false },
     { c: "B", n: "바텐",      mats: ["st","wo","al","pl","ra"],      fns: ["hi","aj","bc","sl"], parts: ["프레임","등판","좌판·방석"], size: false },
+    { c: "L", n: "보조스툴",  mats: ["st","wo","al","pl","ra"],      fns: ["sl","sn","fd","aj"], parts: ["프레임","(없음)","좌판·방석"], size: false },
     { c: "T", n: "탁자",      mats: ["sw","ws","ah","tk","ak","rw","mo","vn","nb","lp","hp","cm","ss","pl","st","mb","gl","fx","dr","wp"], fns: ["sq","rd","ov","fd","hi","aj"], parts: ["상판","다리","엣지"], size: "가로 mm" },
     { c: "P", n: "상판",      mats: ["lp","hp","sw","ws","cm","nb","vn","mb","gl","fx","wp"], fns: ["sq","rd","ov"], parts: ["상판","엣지","(없음)"], size: "가로 mm" },
     { c: "G", n: "탁자다리",  mats: ["st","ss","al","wo"],           fns: ["dk","p2","p3","p4","tw","fr","hh","cv","aj","im"], parts: ["다리","(없음)","(없음)"], size: "높이 mm" },
@@ -254,7 +255,7 @@
     dk:["원반다리","원반 받침"], p2:["2인치다리","2인치 기둥"], p3:["3인치다리","3인치 기둥"], p4:["4인치다리","4인치 기둥"], tw:["쌍기둥","쌍기둥 평판"], fr:["프레임다리","사각 프레임"],
     hh:["H형다리","H형"], cv:["평판곡다리","평판 곡선"], im:["수입다리","수입"], ps:["파라솔","파라솔·차양"], st2:["세트","의자+탁자 세트"],
   };
-  const COLORS = { wt:["화이트","RAL 9016"], bk:["블랙","RAL 9005"], gr:["그레이","RAL 7035"], iv:["아이보리","RAL 1015"], bg:["베이지","RAL 1001"], bl:["블루","RAL 5010"], gn:["그린","RAL 6005"], sv:["실버","RAL 9006"], gd:["골드",""], kk:["카키","RAL 7008"], at:["엔틱","마감"], na:["내추럴","마감"], br:["브라운","RAL 8017"], rd:["레드","RAL 3020"], vt:["빈티지","마감"], "00":["해당없음","부위 없음"] };
+  const COLORS = { wt:["화이트","RAL 9016"], bk:["블랙","RAL 9005"], gr:["그레이","RAL 7035"], iv:["아이보리","RAL 1015"], bg:["베이지","RAL 1001"], bl:["블루","RAL 5010"], gn:["그린","RAL 6005"], sv:["실버","RAL 9006"], gd:["골드",""], kk:["카키","RAL 7008"], at:["엔틱","마감"], na:["내추럴","마감"], br:["브라운","RAL 8017"], rd:["레드","RAL 3020"], vt:["빈티지","마감"], NN:["해당없음","부위 없음 (숫자0·영문O 혼동 방지)"] };
   const USES = { CF:"카페", RS:"식당·주점", CT:"구내식당", OF:"사무·중역", HT:"호텔·숙박", OD:"야외", HM:"가정·홈카페" };
   const BRANDS = { h:"한림", ds:"대신", ys:"유신", el:"엘라톤", fm:"포마이카", mk:"롱코", ij:"일중" };
   const HS = { wo:"9401.61", st:"9401.71", al:"9401.71", pl:"9401.80", ra:"9403.83", ss:"9403.20" };
@@ -272,7 +273,7 @@
     const it = currentItem();
     if (!it.mats.includes(state.mat)) state.mat = it.mats[0] || "";
     if (!it.fns.includes(state.fn)) state.fn = it.fns[0] || "";
-    it.parts.forEach((p, i) => { if (p === "(없음)") state.c[i] = "00"; else if (state.c[i] === "00") state.c[i] = i === 0 ? "bk" : "00"; });
+    it.parts.forEach((p, i) => { if (p === "(없음)") state.c[i] = "NN"; else if (state.c[i] === "NN") state.c[i] = i === 0 ? "bk" : "NN"; });
     if (!it.size) $("in-size").value = "";
   }
   function renderItems() {
@@ -281,7 +282,7 @@
   }
   function renderMats() {
     const it = currentItem(); const box = $("pick-mat"); box.innerHTML = "";
-    $("mat-hint").textContent = (it.c === "T" || it.c === "P") ? "상판 소재 (나무 계열은 갈색, 금속은 회색)" : "프레임 소재 · 소문자 2자";
+    $("mat-hint").textContent = (it.c === "T" || it.c === "P") ? "상판 소재 (나무 계열은 갈색, 금속은 회색)" : "프레임 소재 · 2자";
     it.mats.forEach(m => { const d = MATS[m]; const b = chip(m, d[0], state.mat === m, d[3]); b.title = d[1]; b.onclick = () => { state.mat = m; renderAll(); }; box.appendChild(b); });
   }
   function renderFns() {
@@ -296,7 +297,7 @@
     [0,1,2].forEach(i => {
       const box = $("pick-c" + (i+1)); box.innerHTML = "";
       $("lbl-c" + (i+1)).textContent = (i+1) + "번째 대시 · " + it.parts[i];
-      if (it.parts[i] === "(없음)") { box.innerHTML = '<span class="chip" aria-pressed="true">해당없음 <code>00</code></span>'; return; }
+      if (it.parts[i] === "(없음)") { box.innerHTML = '<span class="chip" aria-pressed="true">해당없음 <code>NN</code></span>'; return; }
       Object.entries(COLORS).forEach(([c, d]) => { const b = chip(c, d[0], state.c[i] === c); b.title = d[1]; b.onclick = () => { state.c[i] = c; renderAll(); }; box.appendChild(b); });
     });
   }
@@ -309,8 +310,9 @@
     const seq = ($("in-seq").value || "").replace(/\D/g, "").padStart(3, "0").slice(-3);
     const size = it.size ? ($("in-size").value || "").replace(/\D/g, "").padStart(4, "0").slice(-4) : "";
     const sizeOn = it.size && ($("in-size").value || "").replace(/\D/g, "").length > 0;
-    let code = it.c + state.mat + seq + "-" + state.c.join("-");
+    let code = (it.c + state.mat + seq + "-" + state.c.join("-")).toUpperCase();
     if (sizeOn) code += "-" + size;
+    code = code.toUpperCase();
     const series = ($("in-series").value || "").trim();
     const matName = MATS[state.mat] ? MATS[state.mat][0] : "";
     const fnName = FNS[state.fn] ? FNS[state.fn][0] : "";
@@ -331,7 +333,7 @@
     rows.forEach(([k, v]) => { const dt = document.createElement("dt"); dt.textContent = k; const dd = document.createElement("dd"); dd.textContent = v; dl.append(dt, dd); });
     const ec = $("out-ecount"); ec.innerHTML = "";
     const useTxt = [...state.uses].join(",") || "—";
-    [["품목코드", r.code], ["품목명", r.name], ["규격", r.size ? "W" + r.size : "—"], ["품목그룹1", r.it.c + " " + r.it.n], ["품목그룹2", state.mat + " " + r.matName], ["품목그룹3", useTxt], ["추가항목1~3", state.c.join(" / ")], ["추가항목4 HS", HS[state.mat] || "—"]]
+    [["품목코드", r.code], ["품목명", r.name], ["규격", r.size ? "W" + r.size : "—"], ["품목그룹1", r.it.c + " " + r.it.n], ["품목그룹2", state.mat.toUpperCase() + " " + r.matName], ["품목그룹3", useTxt], ["추가항목1~3", state.c.join(" / ").toUpperCase()], ["추가항목4 HS", HS[state.mat] || "—"]]
       .forEach(([k, v]) => { const dt = document.createElement("dt"); dt.textContent = k; const dd = document.createElement("dd"); dd.textContent = v; ec.append(dt, dd); });
     const tags = $("out-tags"); tags.innerHTML = "";
     if (!state.uses.size) tags.innerHTML = '<span class="tag">—</span>';
@@ -348,7 +350,7 @@
   $("btn-add").onclick = () => {
     const r = build(); $("list-wrap").hidden = false;
     const tr = document.createElement("tr");
-    const cells = [r.code, r.name, r.size ? "W" + r.size : "", r.it.c + " " + r.it.n, state.mat + " " + r.matName, [...state.uses].join(","), state.c[0], state.c[1], state.c[2], r.fnName];
+    const cells = [r.code, r.name, r.size ? "W" + r.size : "", r.it.c + " " + r.it.n, state.mat.toUpperCase() + " " + r.matName, [...state.uses].join(","), state.c[0].toUpperCase(), state.c[1].toUpperCase(), state.c[2].toUpperCase(), r.fnName];
     cells.forEach((c, i) => { const td = document.createElement("td"); if (i === 0) { const code = document.createElement("code"); code.textContent = c; td.appendChild(code); } else td.textContent = c; tr.appendChild(td); });
     $("list-body").prepend(tr);
     const n = parseInt(r.seq, 10); if (!isNaN(n)) $("in-seq").value = String(n + 1).padStart(3, "0"); renderOut();
@@ -363,7 +365,8 @@
   const t1 = $("t1");
   t1.append(
     node("의자", "C", ["목재 <code>wo</code> · 철재 <code>st</code> · 사출 <code>pl</code> · 알루미늄 <code>al</code> · 라탄 <code>ra</code> · 스텐 <code>ss</code>", "형태: 등받이 · 암체어 · 벤치 · 스툴 · 수납 · 접이 · 회전", "좌판: 원목 · 방석 · 가죽 · 패브릭 (필터)"], "현재 사이트: 목재 40 · 철재 143 · 플라스틱 26 · 골드 · 라탄 · 빠체어 · 보조스툴"),
-    node("바텐", "B", ["철재 <code>st</code> · 목재 <code>wo</code> · 알루미늄 <code>al</code> · 플라스틱 <code>pl</code>", "높이조절 <code>aj</code> · 좌고 65 / 75"], "현재 사이트: 빠체어 (의자 아래)"),
+    node("바텐", "B", ["장르 대분류 · 철재 <code>st</code> · 목재 <code>wo</code> · 알루미늄 <code>al</code> · 플라스틱 <code>pl</code> · 라탄 <code>ra</code>", "높이조절 <code>aj</code> · 좌고 65 / 75"], "현재 사이트: 빠체어 (의자 아래) → 독립 장르로"),
+    node("보조스툴", "L", ["장르 대분류 · 철재 · 목재 · 플라스틱 · 알루미늄 · 라탄", "수납 <code>sn</code> · 접이 <code>fd</code> · 높이조절 <code>aj</code>"], "현재 사이트: 보조스툴 (의자 아래) → 독립 장르로"),
     node("탁자", "T", ["<b>나무 계열</b>: 집성목 <code>sw</code> · 우드슬랩 <code>ws</code> · 애쉬 <code>ah</code> · 무늬목 <code>vn</code> · 내츄럴보드 <code>nb</code>", "<b>인조 상판</b>: LPM <code>lp</code> · HPL <code>hp</code> (브랜드 한림·대신·유신·엘라톤·포마이카는 필터)", "<b>기타</b>: 세라믹 <code>cm</code> · 스텐 <code>ss</code> · 플라스틱 <code>pl</code> · 철재 <code>st</code> · 드럼통 <code>dr</code>", "형태: 사각 · 원형 · 타원 · 접이 · 하이 · 인원 2/4/6"], "현재 사이트: 우드 65 · 우드그레인 70 · 유신HPL · 집성목 20 · 우드슬랩 7 · 세라믹 4 · 철재탁자 · 드럼통"),
     node("소파", "S", ["목재 <code>wo</code> · 철재 <code>st</code> · 패브릭 <code>fb</code> · 가죽 <code>le</code>", "1인 · 2인 · 3인 · 붙박이(주문) · 오토만 · 코너"], "현재 사이트: 목재 7 · 철재 22 · 붙박이 7 · 가정용 9"),
     node("아웃도어", "O", ["합성수지목 <code>wp</code> · 라탄 <code>ra</code> · 알루미늄 <code>al</code> · 철재 <code>st</code>", "의자 · 벤치 · 탁자 · 파라솔(국산·수입) · 세트"], "현재 사이트: 아웃도어 (세부 미확인)"),
