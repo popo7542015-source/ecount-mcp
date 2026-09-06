@@ -125,6 +125,63 @@ async function ask(meetingId, question, targetId) {
   return results;
 }
 
+// 검증관별 역할 (2026-09-03 회의록 확정안 그대로 반영).
+// 역할을 안 정해주면 다들 똑같은 잔소리만 반복해서 교차검증의 의미가 없어진다 — 사장님 지적.
+const AUDIT_FOCUS = {
+  openai:
+    "당신은 제1 검증관입니다. 논리 결함, 빠진 예외 상황, 비용 함정을 공격적으로 지적하세요. " +
+    "특히 \"이 계획이 실패한다면 가장 가능성 높은 원인\"과 \"유지보수 인력이 없는 회사에서 위험한 지점\"을 집중적으로 찾으세요.",
+  gemini:
+    "당신은 제2 검증관입니다. 구글 도구(구글시트/앱시트/앱스크립트) 적합성을 전문으로 검증하세요. " +
+    "우리 회사 인프라가 구글 워크스페이스이므로, \"이걸 구글 도구로 구현했을 때 실제로 돌아가는지, 더 쉬운 구글 도구 방법은 없는지\"를 중심으로 보세요.",
+  deepseek:
+    "당신은 기술 검증관입니다. 복잡한 로직·알고리즘·비용 구조를 깊게 파고들어 검증하세요. " +
+    "겉으로는 그럴듯해도 실제 구현 단계에서 막힐 기술적 함정을 찾으세요.",
+};
+
+// 암행어사: 클로드(작업반장)가 만든 결과물을 다른 AI들이 "각자 독립적으로" 검수한다.
+// 회의(round/ask)와 달리 서로의 의견을 보여주지 않는다 — 서로 눈치 보지 않고 각자 판단해야
+// "교차검증"의 의미가 있기 때문. 클로드 자신은 검증관에서 제외한다(자기 결과물을 자기가 감사할 수 없음).
+async function audit(meetingId, content) {
+  const meeting = getMeeting(meetingId);
+  const text = (content || "").trim() || meeting.messages.map((m) => `[${m.label}] ${m.content}`).join("\n");
+  if (!text) throw new Error("검증할 내용이 없습니다. 회의 내용이 비어있거나 검증할 글을 입력하세요.");
+
+  const auditors = buildProviders().filter((p) => p.id !== "claude");
+  if (auditors.length === 0) {
+    throw new Error("암행어사로 참석할 AI가 없습니다. Render 환경변수(GEMINI_API_KEY/DEEPSEEK_API_KEY/OPENAI_API_KEY 등)를 확인하세요.");
+  }
+
+  const commonRule =
+    "당신은 제조·유통 기업의 자동화·기획 결과물을 심사하는 냉정한 감사관(암행어사)입니다. " +
+    "칭찬이나 요약은 하지 말고, 문제점만 번호를 매겨 조목조목 말하세요. " +
+    "문제가 없다고 판단되면 '문제 없음'이라고만 쓰세요. 모르는 건 모른다고 하고, 추측이면 '추측입니다'라고 밝히세요.";
+
+  const findings = await Promise.all(
+    auditors.map(async (p) => {
+      const focus = AUDIT_FOCUS[p.id];
+      const systemPrompt = focus ? `${commonRule} ${focus}` : commonRule;
+      try {
+        const result = await p.ask({
+          systemPrompt,
+          messages: [{ role: "user", content: text }],
+        });
+        return { speaker: p.id, label: `${p.label}(암행어사)`, content: result };
+      } catch (err) {
+        return { speaker: p.id, label: `${p.label}(암행어사)`, content: `(오류로 검증 못함: ${err.message})` };
+      }
+    })
+  );
+
+  const entries = findings.map((f) =>
+    appendEntry(meeting, { speaker: f.speaker, label: f.label, role: "audit", content: f.content, ts: Date.now() })
+  );
+
+  const record = { topic: meeting.topic, target: text, findings: entries, ts: Date.now() };
+  fireWebhook(process.env.AUDIT_WEBHOOK_URL, record);
+  return entries;
+}
+
 // 지금까지 대화를 3줄 요약 + 최종 결정으로 정리 (참석자 중 첫 번째 AI가 담당)
 async function summarize(meetingId) {
   const meeting = getMeeting(meetingId);
@@ -161,4 +218,4 @@ function getState(meetingId) {
   };
 }
 
-module.exports = { startMeeting, runRound, ask, summarize, getState };
+module.exports = { startMeeting, runRound, ask, audit, summarize, getState };

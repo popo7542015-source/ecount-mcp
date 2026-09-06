@@ -114,6 +114,15 @@ function buildProviders() {
     providers.push({ id: "groq", label: "그록", ask });
   }
 
+  if (process.env.OPENAI_API_KEY) {
+    const ask = openAiCompatible({
+      baseUrl: "https://api.openai.com/v1",
+      apiKey: process.env.OPENAI_API_KEY,
+      model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+    });
+    providers.push({ id: "openai", label: "챗지피티", ask });
+  }
+
   return providers;
 }
 

@@ -186,6 +186,17 @@ app.post("/meeting/api/summarize", async (req, res) => {
   }
 });
 
+// 암행어사: 클로드 외 참석 AI들이 각자 독립적으로 결과물을 검수한다.
+app.post("/meeting/api/audit", async (req, res) => {
+  try {
+    const { meetingId, content } = req.body || {};
+    const results = await meeting.audit(meetingId, content);
+    res.json({ results });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 // 회의실에서 쓰는 재고 빠른조회 (기존 이카운트 조회 도구 재사용, 읽기 전용)
 app.post("/meeting/api/inventory", async (req, res) => {
   try {
