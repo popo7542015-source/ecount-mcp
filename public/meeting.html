@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AI 회의실</title>
+<style>
+  :root {
+    --bg: #f4f1ea;
+    --panel: #ffffff;
+    --ink: #22201c;
+    --sub: #6b655c;
+    --line: #ddd6c8;
+    --accent: #8a5a2b;
+    --accent-ink: #ffffff;
+    --claude-bg: #f0e6da;
+    --gemini-bg: #e2ecf3;
+    --deepseek-bg: #ece2f3;
+    --mod-bg: #fff3cd;
+    --danger: #a83232;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+    font-size: 19px;
+    line-height: 1.5;
+  }
+  header {
+    padding: 18px 20px;
+    background: var(--accent);
+    color: var(--accent-ink);
+  }
+  header h1 { margin: 0; font-size: 24px; }
+  header p { margin: 6px 0 0; font-size: 15px; opacity: 0.9; }
+  main {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 16px;
+  }
+  .panel h2 { margin: 0 0 10px; font-size: 18px; color: var(--sub); }
+  label { display: block; margin-bottom: 6px; font-size: 15px; color: var(--sub); }
+  input[type="text"], select {
+    width: 100%;
+    font-size: 19px;
+    padding: 12px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #fff;
+  }
+  button {
+    font-size: 18px;
+    padding: 14px 18px;
+    border: none;
+    border-radius: 10px;
+    background: var(--accent);
+    color: var(--accent-ink);
+    cursor: pointer;
+  }
+  button:disabled { opacity: 0.5; cursor: default; }
+  button.secondary { background: #e8e0d0; color: var(--ink); }
+  button.mic { background: var(--danger); }
+  button.mic.on { background: #2f9e44; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .row > * { flex: 1; }
+  .row .fixed { flex: none; }
+  #participants { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
+  .chip {
+    display: inline-block;
+    padding: 6px 12px;
+    border-radius: 999px;
+    background: #eee;
+    font-size: 14px;
+    color: var(--sub);
+  }
+  #log { display: flex; flex-direction: column; gap: 10px; max-height: 55vh; overflow-y: auto; }
+  .msg { padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line); }
+  .msg .who { font-weight: bold; font-size: 14px; color: var(--sub); margin-bottom: 4px; }
+  .msg.claude { background: var(--claude-bg); }
+  .msg.gemini { background: var(--gemini-bg); }
+  .msg.deepseek { background: var(--deepseek-bg); }
+  .msg.groq { background: #e2f3e6; }
+  .msg.moderator { background: var(--mod-bg); }
+  #summaryBox { white-space: pre-wrap; background: #fff8e6; border: 1px solid #e8d9a0; padding: 12px; border-radius: 10px; }
+  .hint { font-size: 14px; color: var(--sub); }
+  #status { font-size: 15px; color: var(--sub); min-height: 20px; }
+  .invresult { font-size: 16px; }
+  .invresult div { padding: 6px 0; border-bottom: 1px solid var(--line); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>AI 회의실</h1>
+  <p>클로드 · 스파크(제미나이) — 사장님이 사회자입니다</p>
+</header>
+
+<main>
+
+  <div class="panel" id="startPanel">
+    <h2>A. 회의 시작</h2>
+    <div id="participants"></div>
+    <label for="topicInput">오늘 회의 주제 (없어도 시작 가능)</label>
+    <div class="row">
+      <input type="text" id="topicInput" placeholder="예: 우드슬랩 판매 부진 대책" />
+      <button class="fixed" id="startBtn">회의 시작</button>
+    </div>
+  </div>
+
+  <div class="panel" id="meetingPanel" style="display:none;">
+    <h2>B. 대화</h2>
+    <div id="log"></div>
+    <div id="status"></div>
+    <div class="row" style="margin-top:12px;">
+      <button id="roundBtn">한 바퀴 진행 (전원 발언)</button>
+      <button class="secondary" id="summarizeBtn">요약해</button>
+    </div>
+  </div>
+
+  <div class="panel" id="askPanel" style="display:none;">
+    <h2>C. 사장님 질문 (언제든 가능)</h2>
+    <label for="targetSelect">누구에게 물을까요</label>
+    <select id="targetSelect">
+      <option value="">전체에게</option>
+    </select>
+    <div class="row" style="margin-top:10px;">
+      <input type="text" id="questionInput" placeholder="질문을 입력하거나 마이크 버튼을 누르세요" />
+      <button class="fixed mic" id="micBtn">🎤</button>
+      <button class="fixed" id="sendBtn">보내기</button>
+    </div>
+    <p class="hint">마이크 버튼을 누르고 말하면 글자로 바뀝니다. 확인 후 "보내기"를 누르세요.</p>
+    <label style="margin-top:10px;"><input type="checkbox" id="ttsToggle" checked style="width:auto;" /> 답변을 소리로 읽어주기</label>
+  </div>
+
+  <div class="panel" id="summaryPanel" style="display:none;">
+    <h2>D. 마지막 요약</h2>
+    <div id="summaryBox">아직 요약 안 함</div>
+  </div>
+
+  <div class="panel" id="invPanel">
+    <h2>E. 재고 빠른조회</h2>
+    <div class="row">
+      <select id="invCompany">
+        <option value="odin">오딘</option>
+        <option value="segwang">세광</option>
+      </select>
+      <input type="text" id="invKeyword" placeholder="품목명 일부 (예: 나비수인)" />
+      <button class="fixed" id="invBtn">조회</button>
+    </div>
+    <div class="invresult" id="invResult"></div>
+    <p class="hint">거래처 조회는 아직 이 화면에 연결되지 않았습니다 (구글시트 연동 설정 필요 — 승인 후 진행 예정).</p>
+  </div>
+
+</main>
+
+<script>
+let meetingId = null;
+let participants = [];
+
+const $ = (id) => document.getElementById(id);
+
+function setStatus(text) { $("status").textContent = text || ""; }
+
+function speak(text) {
+  if (!$("ttsToggle").checked) return;
+  try {
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = "ko-KR";
+    window.speechSynthesis.speak(u);
+  } catch (e) { /* 음성합성 미지원 브라우저는 조용히 무시 */ }
+}
+
+function renderParticipants() {
+  $("participants").innerHTML = participants
+    .map((p) => `<span class="chip">${p.label}</span>`)
+    .join("") || '<span class="chip">참석 가능한 AI 없음 (환경변수 확인 필요)</span>';
+
+  const sel = $("targetSelect");
+  sel.innerHTML = '<option value="">전체에게</option>' +
+    participants.map((p) => `<option value="${p.id}">${p.label}에게만</option>`).join("");
+}
+
+function appendMessages(msgs) {
+  const log = $("log");
+  for (const m of msgs) {
+    const div = document.createElement("div");
+    div.className = "msg " + (m.speaker === "moderator" ? "moderator" : m.speaker);
+    div.innerHTML = `<div class="who">${m.label}</div><div>${escapeHtml(m.content)}</div>`;
+    log.appendChild(div);
+    if (m.role === "assistant") speak(m.content);
+  }
+  log.scrollTop = log.scrollHeight;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  }[c]));
+}
+
+async function loadProviders() {
+  const res = await fetch("/meeting/api/providers");
+  const data = await res.json();
+  participants = data.participants;
+  renderParticipants();
+}
+
+$("startBtn").addEventListener("click", async () => {
+  setStatus("회의 시작 중...");
+  const res = await fetch("/meeting/api/start", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ topic: $("topicInput").value }),
+  });
+  const data = await res.json();
+  meetingId = data.meetingId;
+  participants = data.participants;
+  renderParticipants();
+  $("log").innerHTML = "";
+  $("meetingPanel").style.display = "block";
+  $("askPanel").style.display = "block";
+  $("summaryPanel").style.display = "block";
+  setStatus(data.topic ? `회의 주제: ${data.topic}` : "회의를 시작했습니다.");
+});
+
+$("roundBtn").addEventListener("click", async () => {
+  if (!meetingId) return;
+  setStatus("참석자들이 발언 중입니다...");
+  $("roundBtn").disabled = true;
+  try {
+    const res = await fetch("/meeting/api/round", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ meetingId }),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    appendMessages(data.results);
+    setStatus("");
+  } catch (e) {
+    setStatus("오류: " + e.message);
+  } finally {
+    $("roundBtn").disabled = false;
+  }
+});
+
+$("sendBtn").addEventListener("click", async () => {
+  const question = $("questionInput").value.trim();
+  if (!meetingId || !question) return;
+  const targetId = $("targetSelect").value || undefined;
+  appendMessages([{ speaker: "moderator", label: "사장님", role: "moderator", content: question }]);
+  $("questionInput").value = "";
+  setStatus("답변 기다리는 중...");
+  $("sendBtn").disabled = true;
+  try {
+    const res = await fetch("/meeting/api/ask", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ meetingId, question, targetId }),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    appendMessages(data.results);
+    setStatus("");
+  } catch (e) {
+    setStatus("오류: " + e.message);
+  } finally {
+    $("sendBtn").disabled = false;
+  }
+});
+
+$("summarizeBtn").addEventListener("click", async () => {
+  if (!meetingId) return;
+  setStatus("요약 중...");
+  try {
+    const res = await fetch("/meeting/api/summarize", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ meetingId }),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    $("summaryBox").textContent = data.summary;
+    speak(data.summary);
+    setStatus("");
+  } catch (e) {
+    setStatus("오류: " + e.message);
+  }
+});
+
+$("invBtn").addEventListener("click", async () => {
+  const company = $("invCompany").value;
+  const keyword = $("invKeyword").value.trim();
+  $("invResult").textContent = "조회 중...";
+  try {
+    const res = await fetch("/meeting/api/inventory", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ company, keyword }),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    const result = data.result;
+    if (Array.isArray(result)) {
+      $("invResult").innerHTML = result
+        .map((r) => `<div>${r.품목명 || ""} (${r.품목코드 || ""}) — ${r.창고 || ""} 재고 ${r.재고수량 ?? "?"}개</div>`)
+        .join("") || "<div>결과 없음</div>";
+    } else {
+      $("invResult").innerHTML = `<div>${(result && result.설명) || JSON.stringify(result)}</div>`;
+    }
+  } catch (e) {
+    $("invResult").textContent = "오류: " + e.message;
+  }
+});
+
+// ── 음성 입력 (Web Speech API) ──────────────────────────────
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+if (SR) {
+  const recognition = new SR();
+  recognition.lang = "ko-KR";
+  recognition.interimResults = false;
+  let listening = false;
+
+  $("micBtn").addEventListener("click", () => {
+    if (listening) { recognition.stop(); return; }
+    recognition.start();
+  });
+  recognition.addEventListener("start", () => {
+    listening = true;
+    $("micBtn").classList.add("on");
+    setStatus("듣는 중...");
+  });
+  recognition.addEventListener("end", () => {
+    listening = false;
+    $("micBtn").classList.remove("on");
+    setStatus("");
+  });
+  recognition.addEventListener("result", (e) => {
+    const text = e.results[0][0].transcript;
+    $("questionInput").value = text;
+  });
+  recognition.addEventListener("error", (e) => {
+    setStatus("음성인식 오류: " + e.error);
+  });
+} else {
+  $("micBtn").disabled = true;
+  $("micBtn").title = "이 브라우저는 음성인식을 지원하지 않습니다";
+}
+
+loadProviders();
+</script>
+
+</body>
+</html>
