@@ -1,4 +1,5 @@
 require("dotenv").config();
+const path = require("path");
 const express = require("express");
 const { McpServer } = require("@modelcontextprotocol/sdk/server/mcp.js");
 const {
@@ -6,6 +7,8 @@ const {
 } = require("@modelcontextprotocol/sdk/server/streamableHttp.js");
 const { z } = require("zod");
 const { getInventory, getClient, rawCall } = require("./ecount");
+const meeting = require("./meeting");
+const { buildProviders } = require("./providers");
 
 function buildServer() {
   const server = new McpServer({
@@ -131,6 +134,78 @@ app.post("/mcp", async (req, res) => {
 
 app.get("/", (req, res) => {
   res.send("Ecount MCP 서버가 동작 중입니다. Claude 커스텀 커넥터에서 /mcp 경로를 등록하세요.");
+});
+
+// ── AI 회의실 ──────────────────────────────────────────────
+app.get("/meeting", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "meeting.html"));
+});
+
+app.get("/meeting/api/providers", (req, res) => {
+  res.json({ participants: buildProviders().map((p) => ({ id: p.id, label: p.label })) });
+});
+
+app.post("/meeting/api/start", (req, res) => {
+  const meetingId = meeting.startMeeting(req.body?.topic);
+  res.json(meeting.getState(meetingId));
+});
+
+app.get("/meeting/api/state", (req, res) => {
+  try {
+    res.json(meeting.getState(req.query.meetingId));
+  } catch (err) {
+    res.status(404).json({ error: err.message });
+  }
+});
+
+app.post("/meeting/api/round", async (req, res) => {
+  try {
+    const results = await meeting.runRound(req.body?.meetingId);
+    res.json({ results });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.post("/meeting/api/ask", async (req, res) => {
+  try {
+    const { meetingId, question, targetId } = req.body || {};
+    const results = await meeting.ask(meetingId, question, targetId);
+    res.json({ results });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.post("/meeting/api/summarize", async (req, res) => {
+  try {
+    const record = await meeting.summarize(req.body?.meetingId);
+    res.json(record);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// 암행어사: 클로드 외 참석 AI들이 각자 독립적으로 결과물을 검수한다.
+app.post("/meeting/api/audit", async (req, res) => {
+  try {
+    const { meetingId, content } = req.body || {};
+    const results = await meeting.audit(meetingId, content);
+    res.json({ results });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// 회의실에서 쓰는 재고 빠른조회 (기존 이카운트 조회 도구 재사용, 읽기 전용)
+app.post("/meeting/api/inventory", async (req, res) => {
+  try {
+    const { company, keyword } = req.body || {};
+    const result = await getInventory(company, keyword);
+    res.json({ result });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
 });
 
 const PORT = process.env.PORT || 3000;
