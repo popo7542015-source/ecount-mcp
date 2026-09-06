@@ -184,7 +184,8 @@ const $ = (id) => document.getElementById(id);
 
 function setStatus(text) { $("status").textContent = text || ""; }
 
-function speak(text) {
+function speakText(text) { window.speechSynthesis.cancel(); try { const u = new SpeechSynthesisUtterance(text); u.lang = "ko-KR"; window.speechSynthesis.speak(u); } catch(e) {} }
+    function speak(text) {
   if (!$("ttsToggle").checked) return;
   try {
     const u = new SpeechSynthesisUtterance(text);
@@ -208,9 +209,9 @@ function appendMessages(msgs) {
   for (const m of msgs) {
     const div = document.createElement("div");
     div.className = "msg " + (m.speaker === "moderator" ? "moderator" : m.speaker) + (m.role === "audit" ? " audit" : "");
-    div.innerHTML = `<div class="who">${m.label}</div><div>${escapeHtml(m.content)}</div>`;
+    div.innerHTML = `<div class="who">${m.label} <button onclick="speakText(this.parentElement.nextElementSibling.textContent)" style="font-size:13px;padding:1px 6px;background:transparent;border:1px solid #bbb;border-radius:6px;cursor:pointer;">🔊</button></div><div>${escapeHtml(m.content)}</div>`;
     log.appendChild(div);
-    if (m.role === "assistant" || m.role === "audit") speak(m.content);
+    
   }
   log.scrollTop = log.scrollHeight;
 }
@@ -305,7 +306,7 @@ $("summarizeBtn").addEventListener("click", async () => {
     const data = await res.json();
     if (data.error) throw new Error(data.error);
     $("summaryBox").textContent = data.summary;
-    speak(data.summary);
+    
     setStatus("");
   } catch (e) {
     setStatus("오류: " + e.message);
