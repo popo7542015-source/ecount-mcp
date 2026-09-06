@@ -1,4 +1,4 @@
-// AI 회의실에 참석하는 각 AI 회사의 API(창구)를 규격에 맞게 연결하는 부품 모음.
+h// AI 회의실에 참석하는 각 AI 회사의 API(창구)를 규격에 맞게 연결하는 부품 모음.
 // 새 AI를 추가할 때는 이 파일에 함수 하나만 더 만들고 buildProviders()에 등록하면 된다.
 // DeepSeek·Groq처럼 OpenAI 규격을 그대로 쓰는 곳은 openAiCompatible() 하나로 다 처리된다.
 
@@ -7,7 +7,7 @@ async function askAnthropic({ apiKey, model, systemPrompt, messages }) {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "x-api-key": apiKey,
+      "x-api-key": apiKey,h
       "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify({
@@ -89,7 +89,7 @@ function buildProviders() {
       ask: (args) =>
         askGemini({
           apiKey: process.env.GEMINI_API_KEY,
-          model: process.env.GEMINI_MODEL || "gemini-2.5-flash",
+          model: process.env.GEMINI_MODEL || "gemini-3.6-flash",
           ...args,
         }),
     });
