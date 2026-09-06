@@ -76,7 +76,7 @@ function buildProviders() {
       ask: (args) =>
         askAnthropic({
           apiKey: process.env.ANTHROPIC_API_KEY,
-          model: process.env.ANTHROPIC_MODEL || "claude-sonnet-4-5",
+          model: process.env.ANTHROPIC_MODEL || "claude-sonnet-5",
           ...args,
         }),
     });
