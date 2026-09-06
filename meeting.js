@@ -20,7 +20,7 @@ function systemPromptFor(label, topic) {
 // 각 참석자에게는 자신을 포함한 모든 발언을 "누가 한 말인지" 표시해서 user 메시지로 보여준다.
 // (참석자별로 자기 답변만 assistant로 분리하면 로직이 복잡해지므로, 전부 user로 통일해 단순하게 유지)
 function toProviderMessages(messages) {
-  return messages.map((m) => ({
+  if (!messages.length) return [{ role: "user", content: "회의 시작." }]; return messages.map((m) => ({
     role: "user",
     content: `[${m.label}] ${m.content}`,
   }));
