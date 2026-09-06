@@ -91,7 +91,9 @@
   .msg.gemini { background: var(--gemini-bg); }
   .msg.deepseek { background: var(--deepseek-bg); }
   .msg.groq { background: #e2f3e6; }
+  .msg.openai { background: #fde2e2; }
   .msg.moderator { background: var(--mod-bg); }
+  .msg.audit { border-left: 5px solid var(--danger); }
   #summaryBox { white-space: pre-wrap; background: #fff8e6; border: 1px solid #e8d9a0; padding: 12px; border-radius: 10px; }
   .hint { font-size: 14px; color: var(--sub); }
   #status { font-size: 15px; color: var(--sub); min-height: 20px; }
@@ -148,8 +150,18 @@
     <div id="summaryBox">아직 요약 안 함</div>
   </div>
 
+  <div class="panel" id="auditPanel" style="display:none;">
+    <h2>E. 암행어사 검증</h2>
+    <p class="hint">클로드를 뺀 나머지 AI들이 서로 상의 없이 각자 따로 문제점을 찾습니다. 비워두면 지금까지의 회의 내용 전체를 검증합니다.</p>
+    <label for="auditInput">검증할 내용 (비워두면 회의 전체)</label>
+    <textarea id="auditInput" rows="4" style="width:100%; font-size:17px; padding:12px; border:1px solid var(--line); border-radius:8px;"></textarea>
+    <div class="row" style="margin-top:10px;">
+      <button class="fixed" id="auditBtn" style="background:var(--danger);">암행어사 검증 시작</button>
+    </div>
+  </div>
+
   <div class="panel" id="invPanel">
-    <h2>E. 재고 빠른조회</h2>
+    <h2>F. 재고 빠른조회</h2>
     <div class="row">
       <select id="invCompany">
         <option value="odin">오딘</option>
@@ -195,10 +207,10 @@ function appendMessages(msgs) {
   const log = $("log");
   for (const m of msgs) {
     const div = document.createElement("div");
-    div.className = "msg " + (m.speaker === "moderator" ? "moderator" : m.speaker);
+    div.className = "msg " + (m.speaker === "moderator" ? "moderator" : m.speaker) + (m.role === "audit" ? " audit" : "");
     div.innerHTML = `<div class="who">${m.label}</div><div>${escapeHtml(m.content)}</div>`;
     log.appendChild(div);
-    if (m.role === "assistant") speak(m.content);
+    if (m.role === "assistant" || m.role === "audit") speak(m.content);
   }
   log.scrollTop = log.scrollHeight;
 }
@@ -231,6 +243,7 @@ $("startBtn").addEventListener("click", async () => {
   $("meetingPanel").style.display = "block";
   $("askPanel").style.display = "block";
   $("summaryPanel").style.display = "block";
+  $("auditPanel").style.display = "block";
   setStatus(data.topic ? `회의 주제: ${data.topic}` : "회의를 시작했습니다.");
 });
 
@@ -296,6 +309,27 @@ $("summarizeBtn").addEventListener("click", async () => {
     setStatus("");
   } catch (e) {
     setStatus("오류: " + e.message);
+  }
+});
+
+$("auditBtn").addEventListener("click", async () => {
+  if (!meetingId) return;
+  setStatus("암행어사들이 검증 중입니다...");
+  $("auditBtn").disabled = true;
+  try {
+    const res = await fetch("/meeting/api/audit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ meetingId, content: $("auditInput").value }),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    appendMessages(data.results);
+    setStatus("");
+  } catch (e) {
+    setStatus("오류: " + e.message);
+  } finally {
+    $("auditBtn").disabled = false;
   }
 });
 

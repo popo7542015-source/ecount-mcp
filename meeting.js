@@ -125,6 +125,47 @@ async function ask(meetingId, question, targetId) {
   return results;
 }
 
+// 암행어사: 클로드(작업반장)가 만든 결과물을 다른 AI들이 "각자 독립적으로" 검수한다.
+// 회의(round/ask)와 달리 서로의 의견을 보여주지 않는다 — 서로 눈치 보지 않고 각자 판단해야
+// "교차검증"의 의미가 있기 때문. 클로드 자신은 검증관에서 제외한다(자기 결과물을 자기가 감사할 수 없음).
+async function audit(meetingId, content) {
+  const meeting = getMeeting(meetingId);
+  const text = (content || "").trim() || meeting.messages.map((m) => `[${m.label}] ${m.content}`).join("\n");
+  if (!text) throw new Error("검증할 내용이 없습니다. 회의 내용이 비어있거나 검증할 글을 입력하세요.");
+
+  const auditors = buildProviders().filter((p) => p.id !== "claude");
+  if (auditors.length === 0) {
+    throw new Error("암행어사로 참석할 AI가 없습니다. Render 환경변수(GEMINI_API_KEY/DEEPSEEK_API_KEY/OPENAI_API_KEY 등)를 확인하세요.");
+  }
+
+  const auditPrompt =
+    "당신은 제조·유통 기업의 자동화·기획 결과물을 심사하는 냉정한 감사관(암행어사)입니다. " +
+    "아래 내용의 결함·빠진 예외·위험 지점을 찾으세요. 칭찬이나 요약은 하지 말고, 문제점만 번호를 매겨 조목조목 말하세요. " +
+    "문제가 없다고 판단되면 '문제 없음'이라고만 쓰세요. 모르는 건 모른다고 하고, 추측이면 '추측입니다'라고 밝히세요.";
+
+  const findings = await Promise.all(
+    auditors.map(async (p) => {
+      try {
+        const result = await p.ask({
+          systemPrompt: auditPrompt,
+          messages: [{ role: "user", content: text }],
+        });
+        return { speaker: p.id, label: `${p.label}(암행어사)`, content: result };
+      } catch (err) {
+        return { speaker: p.id, label: `${p.label}(암행어사)`, content: `(오류로 검증 못함: ${err.message})` };
+      }
+    })
+  );
+
+  const entries = findings.map((f) =>
+    appendEntry(meeting, { speaker: f.speaker, label: f.label, role: "audit", content: f.content, ts: Date.now() })
+  );
+
+  const record = { topic: meeting.topic, target: text, findings: entries, ts: Date.now() };
+  fireWebhook(process.env.AUDIT_WEBHOOK_URL, record);
+  return entries;
+}
+
 // 지금까지 대화를 3줄 요약 + 최종 결정으로 정리 (참석자 중 첫 번째 AI가 담당)
 async function summarize(meetingId) {
   const meeting = getMeeting(meetingId);
@@ -161,4 +202,4 @@ function getState(meetingId) {
   };
 }
 
-module.exports = { startMeeting, runRound, ask, summarize, getState };
+module.exports = { startMeeting, runRound, ask, audit, summarize, getState };
