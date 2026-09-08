@@ -35,9 +35,22 @@ function fireWebhook(url, payload) {
   }).catch((err) => console.error("회의록 웹훅 전송 실패:", err.message));
 }
 
-function startMeeting(topic) {
+// 회의마다 "참여 AI"를 사장님이 고를 수 있다 — 안 고르면(빈 배열/미지정) 기존처럼 전원 참석.
+function startMeeting(topic, activeProviderIds) {
   const id = randomUUID();
-  meetings.set(id, { topic: (topic || "").trim(), messages: [], lastSummary: null, createdAt: Date.now() });
+  const allIds = buildProviders().map((p) => p.id);
+  const active =
+    Array.isArray(activeProviderIds) && activeProviderIds.length > 0
+      ? activeProviderIds.filter((id) => allIds.includes(id))
+      : allIds;
+  meetings.set(id, {
+    topic: (topic || "").trim(),
+    messages: [],
+    lastSummary: null,
+    lastComparison: null,
+    activeProviderIds: active,
+    createdAt: Date.now(),
+  });
   return id;
 }
 
@@ -45,6 +58,14 @@ function getMeeting(id) {
   const meeting = meetings.get(id);
   if (!meeting) throw new Error("존재하지 않거나 만료된 회의입니다. 회의를 다시 시작해주세요.");
   return meeting;
+}
+
+// 이 회의에서 "참여 AI"로 선택된 대상만 반환 (한 바퀴 진행·전체질문·비교분석에서 사용).
+// 특정 AI를 콕 집어 묻는 것(targetId)은 이 목록과 무관하게 항상 가능하다.
+function activeProviders(meeting) {
+  const all = buildProviders();
+  if (!meeting.activeProviderIds || meeting.activeProviderIds.length === 0) return all;
+  return all.filter((p) => meeting.activeProviderIds.includes(p.id));
 }
 
 async function askProvider(provider, meeting) {
@@ -69,9 +90,9 @@ function appendEntry(meeting, entry) {
 // 활성 참석자 전원이 한 번씩 발언하는 "한 바퀴" 진행
 async function runRound(meetingId) {
   const meeting = getMeeting(meetingId);
-  const providers = buildProviders();
+  const providers = activeProviders(meeting);
   if (providers.length === 0) {
-    throw new Error("참석 가능한 AI가 없습니다. Render 환경변수(API 키)를 확인하세요.");
+    throw new Error("참석 가능한 AI가 없습니다. 참여 AI를 선택했는지, Render 환경변수(API 키)를 확인하세요.");
   }
 
   const results = [];
@@ -103,7 +124,10 @@ async function ask(meetingId, question, targetId) {
     ts: Date.now(),
   });
 
-  const providers = buildProviders().filter((p) => !targetId || p.id === targetId);
+  // 특정 AI를 지목한 질문은 참여 AI 선택과 무관하게 항상 가능. 지목이 없으면 이 회의의 참여 AI 전원에게.
+  const providers = targetId
+    ? buildProviders().filter((p) => p.id === targetId)
+    : activeProviders(meeting);
   if (providers.length === 0) {
     throw new Error(
       targetId ? `'${targetId}' 참석자를 찾을 수 없습니다.` : "참석 가능한 AI가 없습니다."
@@ -207,6 +231,57 @@ async function summarize(meetingId) {
   return record;
 }
 
+// 비교 엔진: AI별 답변을 "공통의견/불일치/근거/가정/불확실성/사실확인필요/소수반론"으로 구조화한다.
+// 참여 AI 중 첫 번째가 비교를 맡는다(summarize와 동일한 방식).
+const COMPARISON_SYSTEM_PROMPT =
+  "당신은 여러 AI의 회의 답변을 비교·분석하는 분석가입니다. 아래 회의 대화 전체를 읽고, " +
+  "다른 설명 문장 없이 아래 형식의 JSON 객체 하나만 출력하세요. 각 항목은 문자열 배열이며, 해당 내용이 없으면 빈 배열([])로 두세요.\n" +
+  '{"agreements": [], "disagreements": [], "evidence": [], "shared_source_risk": [], ' +
+  '"assumptions": [], "uncertainties": [], "fact_checks_needed": [], "minority_strong_points": []}\n' +
+  "각 항목 뜻: agreements=여러 AI가 공통으로 동의한 결론, disagreements=AI마다 다르게 말한 결론, " +
+  "evidence=결론들이 근거로 든 사실, shared_source_risk=여러 AI가 같은 근거 하나만 반복 인용해 독립적이지 않을 위험, " +
+  "assumptions=답변들이 깔고 있는 전제, uncertainties=AI 스스로 불확실하다고 밝힌 부분, " +
+  "fact_checks_needed=사실 확인이 필요한 주장, minority_strong_points=소수 의견이지만 무시하면 안 되는 강한 반론.";
+
+function parseComparisonJson(raw) {
+  const cleaned = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "");
+  return JSON.parse(cleaned);
+}
+
+async function compare(meetingId) {
+  const meeting = getMeeting(meetingId);
+  const providers = activeProviders(meeting);
+  if (providers.length === 0) {
+    throw new Error("참석 가능한 AI가 없습니다. 참여 AI를 선택했는지, Render 환경변수(API 키)를 확인하세요.");
+  }
+
+  const transcript = meeting.messages
+    .filter((m) => m.role === "assistant")
+    .map((m) => `[${m.label}] ${m.content}`)
+    .join("\n");
+  if (!transcript) {
+    throw new Error("비교할 답변이 아직 없습니다. 먼저 '한 바퀴 진행'으로 AI들의 답변을 받으세요.");
+  }
+
+  const comparator = providers[0];
+  const raw = await comparator.ask({
+    systemPrompt: COMPARISON_SYSTEM_PROMPT,
+    messages: [{ role: "user", content: transcript }],
+  });
+
+  let result;
+  try {
+    result = parseComparisonJson(raw);
+  } catch (err) {
+    result = { raw }; // JSON 파싱 실패 시 원문이라도 보여준다.
+  }
+
+  const record = { topic: meeting.topic, comparedBy: comparator.label, result, ts: Date.now() };
+  meeting.lastComparison = record;
+  fireWebhook(process.env.MEETING_COMPARISON_WEBHOOK_URL, record);
+  return record;
+}
+
 function getState(meetingId) {
   const meeting = getMeeting(meetingId);
   return {
@@ -214,8 +289,9 @@ function getState(meetingId) {
     topic: meeting.topic,
     messages: meeting.messages,
     lastSummary: meeting.lastSummary,
-    participants: buildProviders().map((p) => ({ id: p.id, label: p.label })),
+    lastComparison: meeting.lastComparison,
+    participants: activeProviders(meeting).map((p) => ({ id: p.id, label: p.label })),
   };
 }
 
-module.exports = { startMeeting, runRound, ask, audit, summarize, getState };
+module.exports = { startMeeting, runRound, ask, audit, summarize, compare, getState };
