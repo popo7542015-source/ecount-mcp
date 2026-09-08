@@ -93,7 +93,11 @@
   .msg.groq { background: #e2f3e6; }
   .msg.openai { background: #fde2e2; }
   .msg.moderator { background: var(--mod-bg); }
+  .msg.reviewer { background: #eef2ff; }
+  .msg.approval { background: #d3f9d8; border-left: 5px solid #2f9e44; }
   .msg.audit { border-left: 5px solid var(--danger); }
+  .statusBtn { background: #e8e0d0; color: var(--ink); font-size: 15px; padding: 10px 14px; }
+  .statusBtn.current { background: var(--accent); color: var(--accent-ink); }
   #summaryBox { white-space: pre-wrap; background: #fff8e6; border: 1px solid #e8d9a0; padding: 12px; border-radius: 10px; }
   .hint { font-size: 14px; color: var(--sub); }
   #status { font-size: 15px; color: var(--sub); min-height: 20px; }
@@ -161,8 +165,27 @@
     <div id="compareResult"></div>
   </div>
 
+  <div class="panel" id="reviewPanel" style="display:none;">
+    <h2>F. 실무자 의견 · 대표 승인</h2>
+    <input type="text" id="reviewerName" placeholder="이름 (비워두면 '실무자'로 기록)" />
+    <textarea id="reviewerNoteInput" rows="3" placeholder="현장 상황, 비용, 위험 등 의견을 적어주세요" style="width:100%; font-size:17px; padding:12px; border:1px solid var(--line); border-radius:8px; margin-top:8px;"></textarea>
+    <div class="row" style="margin-top:8px;">
+      <button class="fixed secondary" id="addNoteBtn">의견 남기기</button>
+    </div>
+    <hr style="margin:16px 0; border:none; border-top:1px solid var(--line);" />
+    <label>지금 상태: <b id="approvalStatusText">검토중</b></label>
+    <p class="hint">승인 전에는 회사 확정기준으로 취급하지 않습니다. 눌러서 상태를 바꿔주세요.</p>
+    <div class="row" id="statusButtons" style="flex-wrap:wrap;">
+      <button class="fixed statusBtn" data-status="검토중">검토중</button>
+      <button class="fixed statusBtn" data-status="수정요청">수정요청</button>
+      <button class="fixed statusBtn" data-status="보류">보류</button>
+      <button class="fixed statusBtn" data-status="승인" style="background:#2f9e44;color:#fff;">승인</button>
+      <button class="fixed statusBtn" data-status="기각" style="background:var(--danger);color:#fff;">기각</button>
+    </div>
+  </div>
+
   <div class="panel" id="auditPanel" style="display:none;">
-    <h2>F. 암행어사 검증</h2>
+    <h2>G. 암행어사 검증</h2>
     <p class="hint">클로드를 뺀 나머지 AI들이 서로 상의 없이 각자 다른 역할로 검증합니다 — 챗지피티: 논리결함·비용함정, 스파크(제미나이): 구글도구 적합성, 딥시크: 기술적 깊이. 비워두면 지금까지의 회의 내용 전체를 검증합니다.</p>
     <label for="auditInput">검증할 내용 (비워두면 회의 전체)</label>
     <textarea id="auditInput" rows="4" style="width:100%; font-size:17px; padding:12px; border:1px solid var(--line); border-radius:8px;"></textarea>
@@ -172,7 +195,7 @@
   </div>
 
   <div class="panel" id="invPanel">
-    <h2>G. 재고 빠른조회</h2>
+    <h2>H. 재고 빠른조회</h2>
     <div class="row">
       <select id="invCompany">
         <option value="odin">오딘</option>
@@ -271,7 +294,9 @@ $("startBtn").addEventListener("click", async () => {
   $("askPanel").style.display = "block";
   $("summaryPanel").style.display = "block";
   $("comparePanel").style.display = "block";
+  $("reviewPanel").style.display = "block";
   $("auditPanel").style.display = "block";
+  setApprovalStatusUI(data.approvalStatus || "검토중");
   setStatus(data.topic ? `회의 주제: ${data.topic}` : "회의를 시작했습니다.");
 });
 
@@ -391,6 +416,51 @@ $("compareBtn").addEventListener("click", async () => {
   } finally {
     $("compareBtn").disabled = false;
   }
+});
+
+function setApprovalStatusUI(status) {
+  $("approvalStatusText").textContent = status;
+  document.querySelectorAll(".statusBtn").forEach((btn) => {
+    btn.classList.toggle("current", btn.dataset.status === status);
+  });
+}
+
+$("addNoteBtn").addEventListener("click", async () => {
+  if (!meetingId) return;
+  const note = $("reviewerNoteInput").value.trim();
+  if (!note) return;
+  try {
+    const res = await fetch("/meeting/api/note", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ meetingId, author: $("reviewerName").value, note }),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    appendMessages([data.entry]);
+    $("reviewerNoteInput").value = "";
+  } catch (e) {
+    setStatus("오류: " + e.message);
+  }
+});
+
+document.querySelectorAll("#statusButtons .statusBtn").forEach((btn) => {
+  btn.addEventListener("click", async () => {
+    if (!meetingId) return;
+    try {
+      const res = await fetch("/meeting/api/status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ meetingId, status: btn.dataset.status }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setApprovalStatusUI(data.status);
+      appendMessages([data.entry]);
+    } catch (e) {
+      setStatus("오류: " + e.message);
+    }
+  });
 });
 
 $("auditBtn").addEventListener("click", async () => {

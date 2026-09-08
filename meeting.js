@@ -48,6 +48,7 @@ function startMeeting(topic, activeProviderIds) {
     messages: [],
     lastSummary: null,
     lastComparison: null,
+    approvalStatus: "검토중",
     activeProviderIds: active,
     createdAt: Date.now(),
   });
@@ -282,6 +283,44 @@ async function compare(meetingId) {
   return record;
 }
 
+// 실무자 의견: 자유 텍스트를 회의 기록에 "실무자 의견"으로 남긴다(AI 호출 없음, 그냥 기록).
+function addReviewerNote(meetingId, author, note) {
+  const meeting = getMeeting(meetingId);
+  const text = (note || "").trim();
+  if (!text) throw new Error("의견 내용이 비어 있습니다.");
+  const who = (author || "").trim() || "실무자";
+  return appendEntry(meeting, {
+    speaker: "reviewer",
+    label: `${who} (실무자 의견)`,
+    role: "reviewer",
+    content: text,
+    ts: Date.now(),
+  });
+}
+
+// 대표 승인상태. 자비스 스펙 3-7: 승인 전에는 '회사 확정기준'으로 취급하지 않는다 —
+// 여기서는 상태만 기록하고, 실제로 결정장부(구글 드라이브)에 반영하는 건 이후 단계(Drive 연동)에서 처리한다.
+const APPROVAL_STATUSES = ["검토중", "수정요청", "보류", "승인", "기각"];
+
+function setApprovalStatus(meetingId, status, note) {
+  const meeting = getMeeting(meetingId);
+  const s = (status || "").trim();
+  if (!APPROVAL_STATUSES.includes(s)) {
+    throw new Error(`승인상태는 ${APPROVAL_STATUSES.join("/")} 중 하나여야 합니다.`);
+  }
+  meeting.approvalStatus = s;
+  const entry = appendEntry(meeting, {
+    speaker: "approval",
+    label: "사장님 (승인상태)",
+    role: "approval",
+    content: (note || "").trim() ? `${s} — ${note.trim()}` : s,
+    ts: Date.now(),
+  });
+  const record = { topic: meeting.topic, status: s, note: (note || "").trim(), ts: Date.now() };
+  fireWebhook(process.env.MEETING_APPROVAL_WEBHOOK_URL, record);
+  return { entry, status: s };
+}
+
 function getState(meetingId) {
   const meeting = getMeeting(meetingId);
   return {
@@ -290,8 +329,19 @@ function getState(meetingId) {
     messages: meeting.messages,
     lastSummary: meeting.lastSummary,
     lastComparison: meeting.lastComparison,
+    approvalStatus: meeting.approvalStatus,
     participants: activeProviders(meeting).map((p) => ({ id: p.id, label: p.label })),
   };
 }
 
-module.exports = { startMeeting, runRound, ask, audit, summarize, compare, getState };
+module.exports = {
+  startMeeting,
+  runRound,
+  ask,
+  audit,
+  summarize,
+  compare,
+  addReviewerNote,
+  setApprovalStatus,
+  getState,
+};
