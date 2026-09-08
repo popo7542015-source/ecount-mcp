@@ -5,6 +5,7 @@
 
 const { randomUUID } = require("crypto");
 const { buildProviders } = require("./providers");
+const driveArchive = require("./driveArchive");
 
 const meetings = new Map(); // meetingId -> { topic, messages: [...], lastSummary }
 
@@ -321,6 +322,12 @@ function setApprovalStatus(meetingId, status, note) {
   return { entry, status: s };
 }
 
+// 구글 드라이브(자비스미팅테이블)에 회의 기록 저장. 설정 전이면 saved:false로 조용히 알려준다.
+async function saveToDrive(meetingId) {
+  const meeting = getMeeting(meetingId);
+  return driveArchive.saveMeetingToDrive(meeting, meetingId);
+}
+
 function getState(meetingId) {
   const meeting = getMeeting(meetingId);
   return {
@@ -331,6 +338,7 @@ function getState(meetingId) {
     lastComparison: meeting.lastComparison,
     approvalStatus: meeting.approvalStatus,
     participants: activeProviders(meeting).map((p) => ({ id: p.id, label: p.label })),
+    driveConfigured: driveArchive.isConfigured(),
   };
 }
 
@@ -343,5 +351,6 @@ module.exports = {
   compare,
   addReviewerNote,
   setApprovalStatus,
+  saveToDrive,
   getState,
 };

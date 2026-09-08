@@ -218,6 +218,16 @@ app.post("/meeting/api/status", (req, res) => {
   }
 });
 
+// 구글 드라이브(자비스미팅테이블)에 이 회의 기록을 저장한다.
+app.post("/meeting/api/save-to-drive", async (req, res) => {
+  try {
+    const result = await meeting.saveToDrive(req.body?.meetingId);
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 // 암행어사: 클로드 외 참석 AI들이 각자 독립적으로 결과물을 검수한다.
 app.post("/meeting/api/audit", async (req, res) => {
   try {
