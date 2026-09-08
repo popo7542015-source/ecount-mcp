@@ -196,6 +196,28 @@ app.post("/meeting/api/compare", async (req, res) => {
   }
 });
 
+// 실무자 의견: 자유 텍스트를 회의 기록에 남긴다.
+app.post("/meeting/api/note", (req, res) => {
+  try {
+    const { meetingId, author, note } = req.body || {};
+    const entry = meeting.addReviewerNote(meetingId, author, note);
+    res.json({ entry });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// 대표 승인상태: 검토중/수정요청/보류/승인/기각 중 하나로 기록한다.
+app.post("/meeting/api/status", (req, res) => {
+  try {
+    const { meetingId, status, note } = req.body || {};
+    const result = meeting.setApprovalStatus(meetingId, status, note);
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 // 암행어사: 클로드 외 참석 AI들이 각자 독립적으로 결과물을 검수한다.
 app.post("/meeting/api/audit", async (req, res) => {
   try {
