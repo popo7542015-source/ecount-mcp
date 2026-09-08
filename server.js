@@ -146,7 +146,7 @@ app.get("/meeting/api/providers", (req, res) => {
 });
 
 app.post("/meeting/api/start", (req, res) => {
-  const meetingId = meeting.startMeeting(req.body?.topic);
+  const meetingId = meeting.startMeeting(req.body?.topic, req.body?.activeProviderIds);
   res.json(meeting.getState(meetingId));
 });
 
@@ -180,6 +180,16 @@ app.post("/meeting/api/ask", async (req, res) => {
 app.post("/meeting/api/summarize", async (req, res) => {
   try {
     const record = await meeting.summarize(req.body?.meetingId);
+    res.json(record);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// 비교 엔진: 지금까지 나온 AI별 답변을 공통의견/불일치/근거/가정/불확실성 등으로 구조화한다.
+app.post("/meeting/api/compare", async (req, res) => {
+  try {
+    const record = await meeting.compare(req.body?.meetingId);
     res.json(record);
   } catch (err) {
     res.status(400).json({ error: err.message });
