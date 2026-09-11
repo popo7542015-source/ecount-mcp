@@ -57,6 +57,9 @@
   ```
   curl -s https://hook.eu1.make.com/4eaj1la2lq327eclsclk7agpcy4do3ey | tail -5
   ```
+- **호출 방법 (2026-09-12 확인) — 환경에 따라 다름**
+  - 클로드 코드 웹 세션: `curl`로 `hook.eu1.make.com` 직접 호출은 네트워크 정책상 차단됨(프록시가 CONNECT를 403으로 거부). 이 경우 Make MCP의 **"HTTP발사기"** 도구(`mcp__Make__s7368564_http`)로 같은 URL·같은 JSON을 보낼 것. 조회는 method `GET`, 기록은 method `POST` + `jsonBody`.
+  - 코워크·챗GPT·제미나이 등 그 외 환경: 아래 `curl` 명령을 그대로 사용.
 - 세션 종료 시(또는 사용자가 "마무리"라고 하면) 아래 형식으로 기록을 보낼 것.
   - `when`은 현재 KST 초단위, `who`는 "클로드 코드", `docName`은 날짜_클로드코드_제목, `docHtml`은 h1+p HTML 요약.
   ```
