@@ -52,6 +52,17 @@
 - 클로드 코드(이 세션)는 구글 "스프레드시트"를 지원하지 않는다 — 사장님이 커넥터 목록에서 직접 확인한 사실. 구글 드라이브 연동은 되지만 시트 셀 값을 쓰거나 서식을 바꾸는 기능은 없음(파일 생성·복사·이동·삭제만 가능).
 - 이 사실은 이미 결론이 났으므로, 다시 "커넥터를 연결하면 될 수도 있다"는 식으로 반복해서 말하지 말 것. 시트에 직접 값을 써야 하는 작업이 필요하면 사장님께 코워크(Cowork) 사용을 안내하거나, 시트 대신 새 문서/파일 생성으로 대체할 것.
 
+## AI미팅테이블 기록 규칙
+- 세션 시작 시 아래 명령으로 색인 마지막 줄들을 읽고 이어서 작업할 것.
+  ```
+  curl -s https://hook.eu1.make.com/4eaj1la2lq327eclsclk7agpcy4do3ey | tail -5
+  ```
+- 세션 종료 시(또는 사용자가 "마무리"라고 하면) 아래 형식으로 기록을 보낼 것.
+  - `when`은 현재 KST 초단위, `who`는 "클로드 코드", `docName`은 날짜_클로드코드_제목, `docHtml`은 h1+p HTML 요약.
+  ```
+  curl -s -X POST https://hook.eu1.make.com/x1nkmqnnxkuusxgnpygrnk9oj6bcgtxo -H "Content-Type: application/json" -d '{"when":"...","who":"클로드 코드","to":"사장님","what":"...","why":"...","how":"...","result":"...","note":"...","status":"완료","docName":"...","docHtml":"..."}'
+  ```
+
 ## 프로젝트 정보
 - 이 저장소는 이카운트(Ecount) ERP 실시간 조회 MCP 서버 (오딘 53258 / 세광 69073).
 - Render에 배포, Claude 커스텀 커넥터로 연결됨.
