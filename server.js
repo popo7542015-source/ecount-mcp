@@ -6,7 +6,7 @@ const {
   StreamableHTTPServerTransport,
 } = require("@modelcontextprotocol/sdk/server/streamableHttp.js");
 const { z } = require("zod");
-const { getInventory, getClient, rawCall } = require("./ecount");
+const { getInventory, getClient, rawCall, getWarehouses, saveGoodsReceipt } = require("./ecount");
 const meeting = require("./meeting");
 const { buildProviders } = require("./providers");
 
@@ -94,6 +94,81 @@ function buildServer() {
     async ({ company, path, body }) => {
       try {
         const result = await rawCall(company, path, body);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      } catch (err) {
+        return {
+          content: [{ type: "text", text: `오류: ${err.message}` }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  server.registerTool(
+    "ecount_get_warehouses",
+    {
+      title: "이카운트 창고 목록 조회",
+      description:
+        "오딘 또는 세광의 창고코드·창고명 목록을 반환합니다. 생산입고 등 전표 입력에 필요한 창고코드(WH_CD)를 찾을 때 사용합니다. " +
+        "창고별 재고현황에서 뽑으므로 재고가 하나도 없는 창고는 안 나옵니다. 이카운트 제한으로 약 10분에 1회만 호출 가능합니다.",
+      inputSchema: {
+        company: z
+          .enum(["odin", "segwang"])
+          .describe("조회할 회사: odin(오딘) 또는 segwang(세광)"),
+      },
+    },
+    async ({ company }) => {
+      try {
+        const result = await getWarehouses(company);
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      } catch (err) {
+        return {
+          content: [{ type: "text", text: `오류: ${err.message}` }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  server.registerTool(
+    "ecount_save_goods_in",
+    {
+      title: "이카운트 생산입고 전표 입력 (쓰기)",
+      description:
+        "[주의: 실제 데이터를 기록합니다] 오딘 또는 세광에 생산입고 전표 1건을 저장합니다. " +
+        "완성품 품목코드와 수량, 입고 창고코드, 생산된공장 코드를 주면 생산입고 전표가 저장됩니다. " +
+        "경로 /OAPI/V2/GoodsReceipt/SaveGoodsReceipt 사용. 이카운트 제한: 10초에 1회. 반환값의 전표번호를 기록해 두면 나중에 삭제할 수 있습니다. " +
+        "BOM 부품 자동차감 여부는 2026-09-12 기준 아직 미검증입니다.",
+      inputSchema: {
+        company: z
+          .enum(["odin", "segwang"])
+          .describe("회사: odin(오딘) 또는 segwang(세광)"),
+        prod_cd: z.string().describe("완성품 품목코드 (예: test001)"),
+        qty: z.number().positive().describe("생산입고 수량 (0보다 큰 숫자)"),
+        wh_cd: z.string().describe("입고 창고코드 (ecount_get_warehouses 로 확인, 예: 창고(테스트)의 코드)"),
+        factory_cd: z
+          .string()
+          .describe(
+            "생산된공장 코드 (필수). 이카운트 창고등록에서 구분이 '공장'인 코드만 됩니다. 구분이 '창고'인 코드를 넣으면 \"생산된공장(창고구분)\" 오류가 납니다."
+          ),
+        io_date: z
+          .string()
+          .optional()
+          .describe("전표일자 YYYYMMDD. 생략 시 오늘(한국시간)"),
+        remarks: z.string().optional().describe("적요 (선택)"),
+        extra_fields: z
+          .string()
+          .optional()
+          .describe('BulkDatas에 추가할 필드 JSON 문자열 (선택, 예: {"PROD_TYPE":"1"}). 필드명이 확정되지 않은 값을 시험할 때 사용'),
+      },
+    },
+    async (args) => {
+      try {
+        const result = await saveGoodsReceipt(args.company, args);
         return {
           content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
         };
