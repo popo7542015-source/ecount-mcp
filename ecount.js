@@ -131,13 +131,18 @@ async function callApi(companyKey, path, extraBody = {}) {
       }),
     });
     if (!res.ok && res.status === 404) {
-      throw new Error(`API 주소를 찾을 수 없음(404): ${path}`);
+      // 이 서버는 경로를 막지 않는다. 404는 이카운트 서버가 그 경로를 모른다는 뜻(경로명 오류).
+      throw new Error(`이카운트 서버가 API 주소를 찾지 못함(404, 경로명 확인 필요): ${path}`);
     }
     let data;
     try {
       data = await res.json();
     } catch {
-      throw new Error(`응답이 JSON이 아님 (HTTP ${res.status}): ${path}`);
+      const hint =
+        res.status === 412
+          ? " — 이카운트 호출 제한으로 추정(재고현황 조회는 약 10분에 1회, 전표 저장은 10초에 1회). 잠시 후 재시도"
+          : "";
+      throw new Error(`응답이 JSON이 아님 (HTTP ${res.status}): ${path}${hint}`);
     }
     return data;
   };
@@ -211,6 +216,7 @@ async function getInventory(companyKey, itemKeyword) {
     품목코드: r.PROD_CD,
     품목명: r.PROD_DES,
     창고: r.WH_DES || r.WH_CD,
+    창고코드: r.WH_CD,
     재고수량: r.BAL_QTY ?? r.QTY,
   }));
 }
@@ -303,4 +309,102 @@ async function rawCall(companyKey, path, bodyJson) {
   return callApi(companyKey, path, extraBody);
 }
 
-module.exports = { getInventory, getClient, rawCall, COMPANIES };
+// 오늘 날짜를 한국시간 기준 YYYYMMDD 로 (Render 서버는 UTC라 자정 전후 하루 차이 방지)
+function todayYmdKst() {
+  return new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10).replace(/-/g, "");
+}
+
+// 창고 목록: 창고 마스터 단독 조회 API가 공식 목록에 없어서(2026-09-12 확인),
+// 창고별 재고현황 응답에서 창고코드(WH_CD)·창고명(WH_DES)을 뽑아 중복 제거한다.
+// 주의: 재고 행이 하나도 없는 창고는 이 목록에 나오지 않는다.
+// 주의: 이 조회는 이카운트가 약 10분에 1회로 제한(HTTP 412)하므로 자주 부르지 말 것.
+async function getWarehouses(companyKey) {
+  const data = await callApi(
+    companyKey,
+    "/OAPI/V2/InventoryBalance/GetListInventoryBalanceStatusByLocation",
+    { BASE_DATE: todayYmdKst() }
+  );
+  const errMsg = apiErrorMessage(data);
+  if (errMsg) throw new Error(`${COMPANIES[companyKey].label} 창고 조회 오류: ${errMsg}`);
+  const rows = extractRows(data);
+  if (!rows) {
+    throw new Error(`${COMPANIES[companyKey].label} 창고 조회: 목록을 찾을 수 없음. 원본 응답: ${summarize(data)}`);
+  }
+  const byCode = new Map();
+  for (const r of rows) {
+    const cd = r.WH_CD;
+    if (!cd) continue;
+    if (!byCode.has(cd)) byCode.set(cd, { 창고코드: cd, 창고명: r.WH_DES || "", 재고품목수: 0 });
+    byCode.get(cd).재고품목수 += 1;
+  }
+  return [...byCode.values()].sort((a, b) => String(a.창고코드).localeCompare(String(b.창고코드)));
+}
+
+// 생산입고 전표 저장.
+// 경로: /OAPI/V2/GoodsReceipt/SaveGoodsReceipt (2026-09-12 확인 — GoodsIn/SaveGoodsIn 은 이카운트가 404 반환).
+// 본문: { GoodsReceiptList: [{ BulkDatas: { UPLOAD_SER_NO, IO_DATE, PROD_CD, QTY, WH_CD_T(입고창고), WH_CD_F(부품출고창고) } }] }
+// 이카운트 제한: 전표 저장 계열은 10초에 1회.
+const GOODS_RECEIPT_PATH = "/OAPI/V2/GoodsReceipt/SaveGoodsReceipt";
+
+async function saveGoodsReceipt(companyKey, opts = {}) {
+  const { prod_cd, qty, wh_cd, io_date, factory_cd, remarks, wh_cd_from, extra_fields } = opts;
+  if (!COMPANIES[companyKey]) throw new Error(`알 수 없는 회사: ${companyKey}`);
+  if (!prod_cd || !String(prod_cd).trim()) throw new Error("prod_cd(품목코드)는 필수입니다.");
+  if (!wh_cd || !String(wh_cd).trim()) throw new Error("wh_cd(입고 창고코드)는 필수입니다.");
+  const qtyNum = Number(qty);
+  if (!Number.isFinite(qtyNum) || qtyNum <= 0) throw new Error(`qty(수량)는 0보다 큰 숫자여야 합니다: ${qty}`);
+  const ioDate = (io_date || todayYmdKst()).replace(/-/g, "");
+  if (!/^\d{8}$/.test(ioDate)) throw new Error(`io_date는 YYYYMMDD 형식이어야 합니다: ${io_date}`);
+
+  const bulk = {
+    UPLOAD_SER_NO: "1",
+    IO_DATE: ioDate,
+    PROD_CD: String(prod_cd).trim(),
+    QTY: String(qtyNum),
+    WH_CD_T: String(wh_cd).trim(),
+    WH_CD_F: String(wh_cd_from || wh_cd).trim(),
+  };
+  if (factory_cd) bulk.FACTORY_CD = String(factory_cd).trim();
+  if (remarks) bulk.REMARKS = String(remarks);
+  if (extra_fields && String(extra_fields).trim()) {
+    let parsed;
+    try {
+      parsed = JSON.parse(extra_fields);
+    } catch {
+      throw new Error(`extra_fields 가 올바른 JSON이 아닙니다: ${extra_fields}`);
+    }
+    Object.assign(bulk, parsed);
+  }
+
+  const data = await callApi(companyKey, GOODS_RECEIPT_PATH, {
+    GoodsReceiptList: [{ BulkDatas: bulk }],
+  });
+
+  const d = data?.Data || {};
+  const details = Array.isArray(d.ResultDetails) ? d.ResultDetails : [];
+  const errMsg = apiErrorMessage(data);
+  const failCnt = Number(d.FailCnt ?? 0);
+  if (errMsg || failCnt > 0) {
+    const detailErr = details
+      .map((x) => x?.TotalError || x?.Errors?.map((e) => e.Message).join("; "))
+      .filter(Boolean)
+      .join(" | ");
+    throw new Error(
+      `${COMPANIES[companyKey].label} 생산입고 저장 실패: ${errMsg || `실패 ${failCnt}건`}` +
+        (detailErr ? ` — ${detailErr}` : "") +
+        ` — 보낸 데이터: ${JSON.stringify(bulk)} — 원본 응답: ${summarize(data)}`
+    );
+  }
+
+  return {
+    결과: "저장 성공",
+    회사: COMPANIES[companyKey].label,
+    성공건수: d.SuccessCnt ?? null,
+    실패건수: d.FailCnt ?? 0,
+    전표번호: d.SlipNos ?? details.map((x) => x?.Data?.SLIP_NO ?? x?.SlipNo).filter(Boolean),
+    보낸데이터: bulk,
+    원본응답: data,
+  };
+}
+
+module.exports = { getInventory, getClient, rawCall, getWarehouses, saveGoodsReceipt, COMPANIES };
