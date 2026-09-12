@@ -41,6 +41,14 @@
   - 오딘+세광 통합 862곳, S~D 매출등급별 시트도 있음.
 - 세광(69073) API가 "인증되지 않은 API" 오류를 내면: 세광 이카운트 계정에서 API 사용 신청 필요 (코드 문제 아님).
 
+## 이카운트 API 확인 사실 (2026-09-12 라이브 검증 — 다시 추측하지 말 것)
+- 생산입고 저장 경로는 `/OAPI/V2/GoodsReceipt/SaveGoodsReceipt` (목록 키 `GoodsReceiptList`). `GoodsIn/SaveGoodsIn`은 틀린 경로(이카운트 404).
+- BulkDatas 필드: `UPLOAD_SER_NO`, `IO_DATE`, `PROD_CD`, `QTY`, `WH_CD_T`(입고창고), `WH_CD_F`(부품출고창고). `WH_CD` 단독 키가 아님.
+- 재고현황 조회(`GetListInventoryBalanceStatusByLocation`)는 약 10분에 1회 제한(HTTP 412). 시험 절차 짤 때 조회 간격을 두어야 함.
+- 전표 저장 계열은 10초에 1회 제한.
+- 창고 마스터 단독 조회 API 없음 → `ecount_get_warehouses` 도구(재고현황에서 WH_CD/WH_DES 추출) 사용.
+- `ecount_raw_api`는 경로 허용 목록이 없다. 404는 코드가 아니라 이카운트 쪽 경로명 오류.
+
 ## 회사 주요 링크 (항시 사용)
 - **오딘 쇼핑몰**: https://gagucafe114.com/ — 회사(오딘+세광) 공식 쇼핑몰. 사장님이 자주 참조하므로 기억할 것.
 - **종합계획설계도(drawio)**: 구글 드라이브에 저장된 사장님의 종합 기획 다이어그램 (10페이지: 드림파크/카테고리/CCTV/콜센타자동화/가구카테고리/홈피카테고리/원가계산기/AI에이전트/DB만들기/아정당). 파일 ID: 14gvOtNrt57-ZdNogHjmbTru1CkqORsYi — 제목 "종합계획설계도"로 드라이브 검색하면 바로 찾을 수 있음.

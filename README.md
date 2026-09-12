@@ -77,3 +77,25 @@
 **에러가 나면 화면을 캡처해서 저한테 보내주세요.** 이카운트 API 문서의
 정확한 필드명은 아직 검증 전이라, 실제 응답을 보고 코드를 맞춰 고쳐야 할
 가능성이 높습니다 (특히 거래처 조회 부분).
+
+
+---
+
+## 제공 도구 목록 (2026-09-12 기준)
+
+| 도구 | 종류 | 설명 |
+|---|---|---|
+| `ecount_get_inventory` | 조회 | 품목 키워드로 창고별 재고 수량 (창고코드 포함) |
+| `ecount_get_client` | 조회 | 거래처 검색 |
+| `ecount_get_warehouses` | 조회 | 창고코드·창고명 목록 (재고가 있는 창고만) |
+| `ecount_save_goods_in` | **쓰기** | 생산입고 전표 1건 저장 (BOM 부품 자동차감 검증용) |
+| `ecount_raw_api` | 디버그 | 임의 경로 직접 호출 (조회·저장 모두 통과) |
+
+### 이카운트 API 확인 사실 (라이브 검증, 2026-09-12)
+
+- 생산입고 저장 경로: `/OAPI/V2/GoodsReceipt/SaveGoodsReceipt`, 목록 키 `GoodsReceiptList`.
+  `GoodsIn/SaveGoodsIn`, `Production/SaveProduction` 등은 이카운트가 404 반환.
+- BulkDatas 필드: `UPLOAD_SER_NO`, `IO_DATE`(YYYYMMDD), `PROD_CD`, `QTY`, `WH_CD_T`(입고창고), `WH_CD_F`(부품 출고창고).
+- 호출 제한: 재고현황 조회(`GetListInventoryBalanceStatusByLocation`)는 약 10분에 1회(초과 시 HTTP 412), 전표 저장은 10초에 1회.
+- 창고 마스터 단독 조회 API 없음. `GetListInventoryBalanceByLocation`(Status 없는 경로)도 404.
+- 이 서버(`ecount_raw_api`)는 경로를 막지 않는다. 404가 나면 이카운트 쪽 경로명 문제다.
