@@ -95,7 +95,10 @@
 
 - 생산입고 저장 경로: `/OAPI/V2/GoodsReceipt/SaveGoodsReceipt`, 목록 키 `GoodsReceiptList`.
   `GoodsIn/SaveGoodsIn`, `Production/SaveProduction` 등은 이카운트가 404 반환.
-- BulkDatas 필드: `UPLOAD_SER_NO`, `IO_DATE`(YYYYMMDD), `PROD_CD`, `QTY`, `WH_CD_T`(입고창고), `WH_CD_F`(부품 출고창고).
+- BulkDatas 필드: `UPLOAD_SER_NO`, `IO_DATE`(YYYYMMDD), `PROD_CD`, `QTY`, `WH_CD_T`(입고창고), `WH_CD_F`(**생산된공장**).
+- `WH_CD_F`는 부품 출고창고가 아니라 **생산된공장**이다. 구분이 '창고'인 코드를 넣으면
+  `ColCd: WH_CD_F, Message: "생산된공장(창고구분)"` 오류가 난다. 이카운트 창고등록에서 구분이 '공장'인 코드만 받는다.
+- 오류 허용량: 연속 오류 시간당 30건, 1일 5000건 (응답의 `QUANTITY_INFO`에 표시됨).
 - 호출 제한: 재고현황 조회(`GetListInventoryBalanceStatusByLocation`)는 약 10분에 1회(초과 시 HTTP 412), 전표 저장은 10초에 1회.
 - 창고 마스터 단독 조회 API 없음. `GetListInventoryBalanceByLocation`(Status 없는 경로)도 404.
 - 이 서버(`ecount_raw_api`)는 경로를 막지 않는다. 404가 나면 이카운트 쪽 경로명 문제다.

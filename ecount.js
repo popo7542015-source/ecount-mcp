@@ -342,15 +342,25 @@ async function getWarehouses(companyKey) {
 
 // 생산입고 전표 저장.
 // 경로: /OAPI/V2/GoodsReceipt/SaveGoodsReceipt (2026-09-12 확인 — GoodsIn/SaveGoodsIn 은 이카운트가 404 반환).
-// 본문: { GoodsReceiptList: [{ BulkDatas: { UPLOAD_SER_NO, IO_DATE, PROD_CD, QTY, WH_CD_T(입고창고), WH_CD_F(부품출고창고) } }] }
-// 이카운트 제한: 전표 저장 계열은 10초에 1회.
+// 본문: { GoodsReceiptList: [{ BulkDatas: { UPLOAD_SER_NO, IO_DATE, PROD_CD, QTY, WH_CD_T(입고창고), WH_CD_F(생산된공장) } }] }
+//
+// WH_CD_F 는 "부품 출고창고"가 아니라 "생산된공장"이다 (2026-09-12 라이브 확인).
+// 구분이 '창고'인 코드를 넣으면 이카운트가 ColCd=WH_CD_F, Message="생산된공장(창고구분)" 오류를 돌려준다.
+// 즉 이카운트 창고등록에서 구분이 '공장'으로 등록된 코드만 들어간다.
+//
+// 이카운트 제한: 전표 저장 계열은 10초에 1회, 연속 오류는 시간당 30건, 1일 5000건.
 const GOODS_RECEIPT_PATH = "/OAPI/V2/GoodsReceipt/SaveGoodsReceipt";
 
 async function saveGoodsReceipt(companyKey, opts = {}) {
-  const { prod_cd, qty, wh_cd, io_date, factory_cd, remarks, wh_cd_from, extra_fields } = opts;
+  const { prod_cd, qty, wh_cd, io_date, factory_cd, remarks, extra_fields } = opts;
   if (!COMPANIES[companyKey]) throw new Error(`알 수 없는 회사: ${companyKey}`);
   if (!prod_cd || !String(prod_cd).trim()) throw new Error("prod_cd(품목코드)는 필수입니다.");
   if (!wh_cd || !String(wh_cd).trim()) throw new Error("wh_cd(입고 창고코드)는 필수입니다.");
+  if (!factory_cd || !String(factory_cd).trim()) {
+    throw new Error(
+      "factory_cd(생산된공장 코드)는 필수입니다. 이카운트 창고등록에서 구분이 '공장'인 코드만 받습니다."
+    );
+  }
   const qtyNum = Number(qty);
   if (!Number.isFinite(qtyNum) || qtyNum <= 0) throw new Error(`qty(수량)는 0보다 큰 숫자여야 합니다: ${qty}`);
   const ioDate = (io_date || todayYmdKst()).replace(/-/g, "");
@@ -362,9 +372,8 @@ async function saveGoodsReceipt(companyKey, opts = {}) {
     PROD_CD: String(prod_cd).trim(),
     QTY: String(qtyNum),
     WH_CD_T: String(wh_cd).trim(),
-    WH_CD_F: String(wh_cd_from || wh_cd).trim(),
+    WH_CD_F: String(factory_cd).trim(),
   };
-  if (factory_cd) bulk.FACTORY_CD = String(factory_cd).trim();
   if (remarks) bulk.REMARKS = String(remarks);
   if (extra_fields && String(extra_fields).trim()) {
     let parsed;

@@ -43,7 +43,11 @@
 
 ## 이카운트 API 확인 사실 (2026-09-12 라이브 검증 — 다시 추측하지 말 것)
 - 생산입고 저장 경로는 `/OAPI/V2/GoodsReceipt/SaveGoodsReceipt` (목록 키 `GoodsReceiptList`). `GoodsIn/SaveGoodsIn`은 틀린 경로(이카운트 404).
-- BulkDatas 필드: `UPLOAD_SER_NO`, `IO_DATE`, `PROD_CD`, `QTY`, `WH_CD_T`(입고창고), `WH_CD_F`(부품출고창고). `WH_CD` 단독 키가 아님.
+- BulkDatas 필드: `UPLOAD_SER_NO`, `IO_DATE`, `PROD_CD`, `QTY`, `WH_CD_T`(입고창고), `WH_CD_F`(**생산된공장**). `WH_CD` 단독 키가 아님.
+- `WH_CD_F`는 부품 출고창고가 아니라 **생산된공장**이고 필수다. 구분이 '창고'인 코드(예: test5 창고(테스트))를 넣으면 `ColCd: WH_CD_F, Message: "생산된공장(창고구분)"` 오류. 이카운트 창고등록에서 구분이 '공장'인 코드만 받는다.
+- 오딘 창고코드(재고 있는 곳만): `test5` 창고(테스트), `001` 남양주창고, `00002` 남양주공장, `004` 미확인재고, `005` 하자제품. 창고 마스터 API가 없어 재고 0인 창고·공장은 이 목록에 안 나온다.
+- 저장 실패해도 응답 Status는 200이고, 실제 성패는 `Data.SuccessCnt`/`Data.FailCnt`와 `Data.ResultDetails[].Errors`를 봐야 한다.
+- 오류 허용량: 연속 오류 시간당 30건, 1일 5000건.
 - 재고현황 조회(`GetListInventoryBalanceStatusByLocation`)는 약 10분에 1회 제한(HTTP 412). 시험 절차 짤 때 조회 간격을 두어야 함.
 - 전표 저장 계열은 10초에 1회 제한.
 - 창고 마스터 단독 조회 API 없음 → `ecount_get_warehouses` 도구(재고현황에서 WH_CD/WH_DES 추출) 사용.

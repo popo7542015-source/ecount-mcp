@@ -140,8 +140,9 @@ function buildServer() {
       title: "이카운트 생산입고 전표 입력 (쓰기)",
       description:
         "[주의: 실제 데이터를 기록합니다] 오딘 또는 세광에 생산입고 전표 1건을 저장합니다. " +
-        "완성품 품목코드와 수량, 입고 창고코드를 주면 이카운트가 BOM에 따라 부품을 차감하고 완성품 재고를 늘립니다. " +
-        "경로 /OAPI/V2/GoodsReceipt/SaveGoodsReceipt 사용. 이카운트 제한: 10초에 1회. 반환값의 전표번호를 기록해 두면 나중에 삭제할 수 있습니다.",
+        "완성품 품목코드와 수량, 입고 창고코드, 생산된공장 코드를 주면 생산입고 전표가 저장됩니다. " +
+        "경로 /OAPI/V2/GoodsReceipt/SaveGoodsReceipt 사용. 이카운트 제한: 10초에 1회. 반환값의 전표번호를 기록해 두면 나중에 삭제할 수 있습니다. " +
+        "BOM 부품 자동차감 여부는 2026-09-12 기준 아직 미검증입니다.",
       inputSchema: {
         company: z
           .enum(["odin", "segwang"])
@@ -149,16 +150,16 @@ function buildServer() {
         prod_cd: z.string().describe("완성품 품목코드 (예: test001)"),
         qty: z.number().positive().describe("생산입고 수량 (0보다 큰 숫자)"),
         wh_cd: z.string().describe("입고 창고코드 (ecount_get_warehouses 로 확인, 예: 창고(테스트)의 코드)"),
+        factory_cd: z
+          .string()
+          .describe(
+            "생산된공장 코드 (필수). 이카운트 창고등록에서 구분이 '공장'인 코드만 됩니다. 구분이 '창고'인 코드를 넣으면 \"생산된공장(창고구분)\" 오류가 납니다."
+          ),
         io_date: z
           .string()
           .optional()
           .describe("전표일자 YYYYMMDD. 생략 시 오늘(한국시간)"),
-        factory_cd: z.string().optional().describe("생산공장 코드 (선택)"),
         remarks: z.string().optional().describe("적요 (선택)"),
-        wh_cd_from: z
-          .string()
-          .optional()
-          .describe("부품 출고 창고코드 (선택, 생략 시 입고 창고와 동일)"),
         extra_fields: z
           .string()
           .optional()
