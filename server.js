@@ -6,7 +6,7 @@ const {
   StreamableHTTPServerTransport,
 } = require("@modelcontextprotocol/sdk/server/streamableHttp.js");
 const { z } = require("zod");
-const { getInventory, getClient, rawCall } = require("./ecount");
+const { getInventory, getClient, rawCall, getApiStatus, resetLoginLock } = require("./ecount");
 const meeting = require("./meeting");
 const { buildProviders } = require("./providers");
 
@@ -21,7 +21,8 @@ function buildServer() {
     {
       title: "이카운트 재고 조회",
       description:
-        "품목명(또는 품목코드) 일부를 입력하면 오딘 또는 세광의 실시간 재고 수량을 조회합니다.",
+        "품목명(또는 품목코드) 일부를 입력하면 오딘 또는 세광의 재고 수량을 조회합니다. " +
+        "이카운트가 재고 목록조회를 10분에 1회만 허용하므로 10분 이내 재조회는 캐시 자료가 나오며, 결과의 기준시각을 함께 알려줍니다.",
       inputSchema: {
         company: z
           .enum(["odin", "segwang"])
@@ -68,6 +69,31 @@ function buildServer() {
           content: [{ type: "text", text: `오류: ${err.message}` }],
           isError: true,
         };
+      }
+    }
+  );
+
+  server.registerTool(
+    "ecount_api_status",
+    {
+      title: "이카운트 API 호출 상태 확인 / 로그인 잠금 해제",
+      description:
+        "이카운트 호출 제한(10분·1초·10초) 현황, 목록 캐시가 언제 받은 자료인지, 로그인 연속 실패로 자동 중단된 회사가 있는지 확인합니다. " +
+        "reset_login_lock에 회사를 지정하면 접속 정보를 고친 뒤 자동 중단을 해제합니다.",
+      inputSchema: {
+        reset_login_lock: z
+          .enum(["odin", "segwang"])
+          .optional()
+          .describe("자동 중단을 해제할 회사. 원인(회사코드·인증키·등록 IP)을 고친 뒤에만 사용하세요."),
+      },
+    },
+    async ({ reset_login_lock }) => {
+      try {
+        const 해제 = reset_login_lock ? resetLoginLock(reset_login_lock) : null;
+        const result = { ...(해제 ? { 잠금해제: 해제 } : {}), ...getApiStatus() };
+        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      } catch (err) {
+        return { content: [{ type: "text", text: `오류: ${err.message}` }], isError: true };
       }
     }
   );

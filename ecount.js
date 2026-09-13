@@ -4,6 +4,8 @@
 // 참고: 이 파일은 이카운트 공식 문서에 공개된 흐름(Zone 조회 -> 로그인 -> 세션ID 발급 ->
 // Zone+세션ID로 각 API 호출)을 근거로 작성했습니다.
 
+const limits = require("./ecountLimits");
+
 const DOMAIN = process.env.ECOUNT_USE_PRODUCTION === "true" ? "oapi" : "sboapi";
 // Test Key(sboapi) vs API Key(oapi, 운영). 처음엔 Test Key로 시작 권장.
 
@@ -47,13 +49,17 @@ function apiErrorMessage(data) {
 }
 
 async function getZone(comCode) {
-  const url = `https://${DOMAIN}.ecount.com/OAPI/V2/Zone`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ COM_CODE: comCode }),
+  const path = "/OAPI/V2/Zone";
+  const url = `https://${DOMAIN}.ecount.com${path}`;
+  // Zone API는 10분에 1회 제한. 제한에 걸리면 기다리지 않고 바로 거절된다(매뉴얼 2-5).
+  const { data } = await limits.withLimit(path, { COM_CODE: comCode }, async () => {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ COM_CODE: comCode }),
+    });
+    return res.json();
   });
-  const data = await res.json();
   const zone = data?.Data?.ZONE || data?.Data?.Zone || data?.ZONE;
   if (!zone) {
     throw new Error(
@@ -66,39 +72,56 @@ async function getZone(comCode) {
 async function login(companyKey, forceNew = false) {
   const company = COMPANIES[companyKey];
   if (!company) throw new Error(`알 수 없는 회사: ${companyKey}`);
-  if (!company.comCode || !company.userId || !company.apiCertKey) {
-    throw new Error(
-      `${company.label} 접속 정보가 서버 환경변수에 설정되지 않았습니다. ` +
-        `Render 사이트의 Environment 메뉴에서 ` +
-        `${companyKey.toUpperCase()}_COM_CODE / ${companyKey.toUpperCase()}_USER_ID / ` +
-        `${companyKey.toUpperCase()}_API_CERT_KEY 세 항목을 확인하세요.`
-    );
-  }
 
   const cached = sessionCache[companyKey];
   if (!forceNew && cached && cached.expiresAt > Date.now()) {
     return cached;
   }
 
+  // IP 차단 방지(매뉴얼 2-6):
+  //  (1) 로그인 전에 회사코드·사용자ID·인증키를 먼저 검증하고,
+  //  (2) 연속 실패가 쌓여 자동 중단된 상태면 아예 호출하지 않는다.
+  limits.assertLoginAllowed(companyKey, company.label);
+  limits.validateCredentials(companyKey, company);
+
   const zone = company.zone || (await getZone(company.comCode));
 
-  const url = `https://${DOMAIN}${zone}.ecount.com/OAPI/V2/OAPILogin`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      COM_CODE: company.comCode,
-      USER_ID: company.userId,
-      API_CERT_KEY: company.apiCertKey,
-      LAN_TYPE: "ko-KR",
-      ZONE: zone,
-    }),
-  });
-  const data = await res.json();
+  const path = "/OAPI/V2/OAPILogin";
+  const url = `https://${DOMAIN}${zone}.ecount.com${path}`;
+  const requestBody = {
+    COM_CODE: company.comCode,
+    USER_ID: company.userId,
+    API_CERT_KEY: company.apiCertKey,
+    LAN_TYPE: "ko-KR",
+    ZONE: zone,
+  };
+
+  let data;
+  try {
+    // 로그인 API도 10분에 1회 제한. 초과하면 기다리지 않고 거절된다.
+    ({ data } = await limits.withLimit(path, requestBody, async () => {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestBody),
+      });
+      return res.json();
+    }));
+  } catch (err) {
+    // 호출 제한에 걸려 거절된 것은 "로그인 실패"가 아니므로 실패 횟수에 넣지 않는다.
+    throw err;
+  }
+
   const sessionId = data?.Data?.Datas?.SESSION_ID || data?.Data?.SESSION_ID;
   if (!sessionId) {
-    throw new Error(`${company.label} 로그인 실패. 응답: ${summarize(data)}`);
+    const message = `${company.label} 로그인 실패. 응답: ${summarize(data)}`;
+    const rec = limits.recordLoginFailure(companyKey, company.label, message);
+    throw new Error(
+      `${message} (연속 실패 ${rec.failures}/${limits.MAX_LOGIN_FAILURES}회` +
+        `${rec.lockedAt ? " — 자동 중단됨, 더 이상 시도하지 않습니다" : ""})`
+    );
   }
+  limits.recordLoginSuccess(companyKey);
 
   const session = {
     sessionId,
@@ -112,40 +135,57 @@ async function login(companyKey, forceNew = false) {
   return session;
 }
 
+// 마지막 호출이 캐시에서 나왔는지 등을 조회 함수에 알려주기 위한 값.
+let lastCallMeta = null;
+
 // 이카운트 API 1회 호출. 세션 만료로 보이는 오류면 재로그인 후 한 번 더 시도.
+// 단, 재로그인도 10분 1회 제한을 받으므로 무한 재시도는 일어나지 않는다(매뉴얼 2-6).
 async function callApi(companyKey, path, extraBody = {}) {
   const attempt = async (forceNewLogin) => {
     const session = await login(companyKey, forceNewLogin);
     const url = `https://${DOMAIN}${session.zone}.ecount.com${path}?SESSION_ID=${session.sessionId}`;
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        SESSION_ID: session.sessionId,
-        COM_CODE: session.comCode,
-        USER_ID: session.userId,
-        ZONE: session.zone,
-        API_CERT_KEY: session.apiCertKey,
-        LAN_TYPE: "ko-KR",
-        ...extraBody,
-      }),
+    const requestBody = {
+      SESSION_ID: session.sessionId,
+      COM_CODE: session.comCode,
+      USER_ID: session.userId,
+      ZONE: session.zone,
+      API_CERT_KEY: session.apiCertKey,
+      LAN_TYPE: "ko-KR",
+      ...extraBody,
+    };
+
+    // 경로를 보고 목록조회(10분 캐시)·단건조회(1초 간격)·저장(10초 간격 큐)으로 갈라
+    // 이카운트 호출 제한을 지킨다(매뉴얼 2-5).
+    const { data, meta } = await limits.withLimit(path, extraBody, async () => {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestBody),
+      });
+      if (!res.ok && res.status === 404) {
+        throw new Error(`API 주소를 찾을 수 없음(404): ${path}`);
+      }
+      if (!res.ok && (res.status === 412 || res.status === 302)) {
+        throw new Error(
+          `이카운트 호출 횟수 초과(HTTP ${res.status}): ${path} — 제한 시간이 지난 뒤 다시 시도하세요.`
+        );
+      }
+      try {
+        return await res.json();
+      } catch {
+        throw new Error(`응답이 JSON이 아님 (HTTP ${res.status}): ${path}`);
+      }
     });
-    if (!res.ok && res.status === 404) {
-      throw new Error(`API 주소를 찾을 수 없음(404): ${path}`);
-    }
-    let data;
-    try {
-      data = await res.json();
-    } catch {
-      throw new Error(`응답이 JSON이 아님 (HTTP ${res.status}): ${path}`);
-    }
+    lastCallMeta = meta;
     return data;
   };
 
+  lastCallMeta = null;
   let data = await attempt(false);
   const errMsg = apiErrorMessage(data);
   if (errMsg && /session|세션|login|로그인/i.test(errMsg)) {
-    // 세션 만료로 추정 → 새로 로그인해서 한 번만 재시도
+    // 세션 만료로 추정 → 새로 로그인해서 "한 번만" 재시도.
+    // 로그인 제한(10분 1회)에 걸리면 여기서 오류가 나고 그대로 끝난다. 반복 시도 안 함.
     data = await attempt(true);
   }
   return data;
@@ -200,19 +240,43 @@ async function getInventory(companyKey, itemKeyword) {
       )
     : rows;
 
+  // 재고 목록조회는 10분에 1회만 부를 수 있어 캐시를 쓴다. 언제 받은 자료인지 반드시 같이 알린다.
+  const 기준 = describeFreshness();
+
   if (matched.length === 0) {
     return {
+      ...기준,
       결과: "해당 품목 없음",
       설명: `전체 ${rows.length}개 품목 중 '${keyword}' 포함 품목이 없습니다. 검색어를 짧게 줄여서 다시 시도해보세요.`,
     };
   }
 
-  return matched.map((r) => ({
-    품목코드: r.PROD_CD,
-    품목명: r.PROD_DES,
-    창고: r.WH_DES || r.WH_CD,
-    재고수량: r.BAL_QTY ?? r.QTY,
-  }));
+  return {
+    ...기준,
+    품목수: matched.length,
+    목록: matched.map((r) => ({
+      품목코드: r.PROD_CD,
+      창고코드: r.WH_CD,
+      품목명: r.PROD_DES,
+      창고: r.WH_DES || r.WH_CD,
+      재고수량: r.BAL_QTY ?? r.QTY,
+    })),
+  };
+}
+
+// 방금 받은 자료가 실시간인지, 캐시에서 나온 몇 분 전 자료인지 한국어로 알려준다.
+function describeFreshness() {
+  const meta = lastCallMeta;
+  const at = meta?.cached ? meta.cachedAt : Date.now();
+  const 시각 = new Date(at).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" });
+  if (!meta?.cached) return { 기준시각: `${시각} (이카운트 실시간 조회)` };
+  const 분 = Math.floor((Date.now() - meta.cachedAt) / 60000);
+  return {
+    기준시각: `${시각} 기준 (${분}분 전 받은 자료)`,
+    안내:
+      "이카운트가 재고 목록조회를 10분에 1회만 허용해, 10분 이내 재조회는 앞서 받은 자료를 그대로 보여줍니다." +
+      (meta.stale ? ` (이번 재조회는 실패했습니다: ${meta.error})` : ""),
+  };
 }
 
 // 거래처 조회: 정확한 엔드포인트가 문서마다 달라서, 후보 주소를 순서대로 시도한다.
@@ -303,4 +367,11 @@ async function rawCall(companyKey, path, bodyJson) {
   return callApi(companyKey, path, extraBody);
 }
 
-module.exports = { getInventory, getClient, rawCall, COMPANIES };
+module.exports = {
+  getInventory,
+  getClient,
+  rawCall,
+  COMPANIES,
+  getApiStatus: limits.getStatus,
+  resetLoginLock: limits.resetLoginLock,
+};
