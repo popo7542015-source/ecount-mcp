@@ -1,5 +1,8 @@
 node_modules/
 .env
 
-# 클로드 코드 로컬 권한 설정 (저장소에 넣지 않음 — 커밋이 차단됨)
-.claude/
+# 클로드 코드 설정
+#  - .claude/settings.json 은 저장소에 넣는다 (승인 클릭을 없애는 공용 설정)
+#  - 나머지(.claude/settings.local.json 등)는 개인 파일이라 제외
+.claude/*
+!.claude/settings.json
